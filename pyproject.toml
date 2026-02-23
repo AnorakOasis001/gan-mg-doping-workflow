@@ -1,0 +1,13 @@
+[project]
+name = "gan-mg-doping-workflow"
+version = "0.1.0"
+description = "Scientific ML workflow for Mg-doped GaN: structure generation, relaxation, and thermodynamic analysis."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
