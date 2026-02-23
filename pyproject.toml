@@ -11,3 +11,6 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[project.scripts]
+ganmg = "gan_mg.cli:main"
