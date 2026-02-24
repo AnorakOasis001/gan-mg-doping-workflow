@@ -2,6 +2,10 @@
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-cov>=5"]
+plot = ["matplotlib>=3.8"]
+
 [project]
 name = "gan-mg-doping-workflow"
 version = "0.1.0"
