@@ -238,5 +238,3 @@ Target audience:
 See `LICENSE`.
 
 ---
-
-Your repo now looks professional and intentional.
