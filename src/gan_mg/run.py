@@ -60,3 +60,14 @@ def latest_run_id(run_root: Path) -> str:
 
     latest = max(runs, key=lambda p: p.stat().st_mtime)
     return latest.name
+
+
+import json
+
+
+def load_run_meta(run_dir: Path) -> dict:
+    """Load run.json metadata for a given run directory."""
+    meta_path = run_dir / "run.json"
+    if not meta_path.exists():
+        return {}
+    return json.loads(meta_path.read_text(encoding="utf-8"))
