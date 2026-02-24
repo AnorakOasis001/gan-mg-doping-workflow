@@ -216,3 +216,9 @@ data/sample_outputs/
 # Generated analysis outputs
 results/figures/
 results/tables/
+
+# Runs (generated experiments)
+runs/
+
+# VS Code
+.vscode/
