@@ -87,3 +87,87 @@ def write_thermo_txt(result: ThermoResult, out_path: Path) -> None:
         f"F   (eV)  = {result.F:.6f}\n",
         encoding="utf-8",
     )
+
+def _get_attr(obj, names, default=None):
+    """Try multiple attribute names; return the first that exists."""
+    for n in names:
+        if hasattr(obj, n):
+            return getattr(obj, n)
+    return default
+
+
+def sweep_thermo_from_csv(
+    csv_path: Path,
+    T_values: list[float],
+    energy_col: str = "energy_eV",
+) -> list[dict]:
+    """
+    Run boltzmann_thermo_from_csv for each temperature and return list of dict rows.
+    This wrapper is robust to different ThermoResult field names.
+    """
+    csv_path = Path(csv_path)
+    rows: list[dict] = []
+
+    for T in T_values:
+        res = boltzmann_thermo_from_csv(csv_path, T=T, energy_col=energy_col)
+
+        N = _get_attr(res, ["N", "n", "num_states"])
+        Emin = _get_attr(res, ["Emin_eV", "Emin", "emin_eV", "emin"])
+        Zt = _get_attr(res, ["Z_tilde", "Ztilde", "Z", "z_tilde"])
+        Eavg = _get_attr(res, ["Eavg_eV", "Eavg", "E_avg"])   # <-- add E_avg
+        F = _get_attr(res, ["F_eV", "F"])                      # <-- F is your field
+
+        rows.append(
+            {
+                "T_K": float(T),
+                "N": N,
+                "Emin_eV": Emin,
+                "Z_tilde": Zt,
+                "Eavg_eV": Eavg,
+                "F_eV": F,
+            }
+        )
+
+    rows.sort(key=lambda r: r["T_K"])
+    return rows
+
+
+def write_thermo_vs_T_csv(rows: list[dict], out_csv: Path) -> None:
+    out_csv = Path(out_csv)
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+
+    fieldnames = ["T_K", "N", "Emin_eV", "Z_tilde", "Eavg_eV", "F_eV"]
+    with out_csv.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w.writeheader()
+        for r in rows:
+            w.writerow(r)
+
+
+def plot_thermo_vs_T(rows: list[dict], out_png: Path) -> None:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from pathlib import Path
+
+    # Debug: validate keys once
+    required = {"T_K", "F_eV", "Eavg_eV"}
+    missing = [required - set(r.keys()) for r in rows[:1]]
+    if missing and missing[0]:
+        raise KeyError(f"Row is missing keys {missing[0]}. Row keys are: {list(rows[0].keys())}")
+
+    T = [r["T_K"] for r in rows]
+    F = [r["F_eV"] for r in rows]
+    E = [r["Eavg_eV"] for r in rows]
+
+    plt.figure()
+    plt.plot(T, F, label="F (eV)")
+    plt.plot(T, E, label="<E> (eV)")
+    plt.xlabel("Temperature (K)")
+    plt.ylabel("Energy (eV)")
+    plt.legend()
+
+    out_png = Path(out_png)
+    out_png.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(out_png, dpi=200, bbox_inches="tight")
+    plt.close()
