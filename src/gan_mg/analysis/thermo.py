@@ -10,12 +10,12 @@ K_B_EV_PER_K = 8.617333262e-5  # Boltzmann constant in eV/K
 
 @dataclass(frozen=True)
 class ThermoResult:
-    T: float
-    n: int
-    emin: float
-    Z_tilde: float
-    E_avg: float
-    F: float
+    temperature_K: float
+    num_configurations: int
+    mixing_energy_min_eV: float
+    mixing_energy_avg_eV: float
+    partition_function: float
+    free_energy_mix_eV: float
 
 
 def read_energies_csv(csv_path: Path, energy_col: str = "energy_eV") -> list[float]:
@@ -47,26 +47,33 @@ def boltzmann_thermo_from_energies(energies: list[float], T: float) -> ThermoRes
     Uses a numerically-stable energy shift by Emin.
 
     Returns:
-      - Z_tilde = sum_i exp(-beta*(Ei - Emin))
-      - <E> in eV
-      - F in eV, where F = Emin - (1/beta)*ln(Z_tilde)
+      - partition_function = sum_i exp(-beta*(Ei - Emin))
+      - mixing_energy_avg_eV in eV
+      - free_energy_mix_eV in eV, where F = Emin - (1/beta)*ln(partition_function)
     """
     if T <= 0:
         raise ValueError("Temperature T must be > 0.")
 
     beta = 1.0 / (K_B_EV_PER_K * T)
-    emin = min(energies)
+    mixing_energy_min_eV = min(energies)
 
-    shifted = [e - emin for e in energies]
+    shifted = [e - mixing_energy_min_eV for e in energies]
     weights = [math.exp(-beta * e) for e in shifted]
-    Z_tilde = sum(weights)
+    partition_function = sum(weights)
 
-    probs = [w / Z_tilde for w in weights]
-    E_avg = sum(p * e for p, e in zip(probs, energies))
+    probs = [w / partition_function for w in weights]
+    mixing_energy_avg_eV = sum(p * e for p, e in zip(probs, energies))
 
-    F = emin - (1.0 / beta) * math.log(Z_tilde)
+    free_energy_mix_eV = mixing_energy_min_eV - (1.0 / beta) * math.log(partition_function)
 
-    return ThermoResult(T=T, n=len(energies), emin=emin, Z_tilde=Z_tilde, E_avg=E_avg, F=F)
+    return ThermoResult(
+        temperature_K=T,
+        num_configurations=len(energies),
+        mixing_energy_min_eV=mixing_energy_min_eV,
+        mixing_energy_avg_eV=mixing_energy_avg_eV,
+        partition_function=partition_function,
+        free_energy_mix_eV=free_energy_mix_eV,
+    )
 
 
 def boltzmann_thermo_from_csv(csv_path: Path, T: float, energy_col: str = "energy_eV") -> ThermoResult:
@@ -79,11 +86,75 @@ def write_thermo_txt(result: ThermoResult, out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     out_path.write_text(
-        f"T(K) = {result.T}\n"
-        f"N    = {result.n}\n"
-        f"Emin (eV) = {result.emin:.6f}\n"
-        f"Z_tilde   = {result.Z_tilde:.6e}\n"
-        f"<E> (eV)  = {result.E_avg:.6f}\n"
-        f"F   (eV)  = {result.F:.6f}\n",
+        f"temperature_K = {result.temperature_K}\n"
+        f"num_configurations = {result.num_configurations}\n"
+        f"mixing_energy_min_eV = {result.mixing_energy_min_eV:.6f}\n"
+        f"mixing_energy_avg_eV = {result.mixing_energy_avg_eV:.6f}\n"
+        f"partition_function = {result.partition_function:.6e}\n"
+        f"free_energy_mix_eV = {result.free_energy_mix_eV:.6f}\n",
         encoding="utf-8",
     )
+
+
+def sweep_thermo_from_csv(
+    csv_path: Path,
+    temperatures_K: list[float],
+    energy_col: str = "energy_eV",
+) -> list[ThermoResult]:
+    energies = read_energies_csv(csv_path, energy_col=energy_col)
+    return [boltzmann_thermo_from_energies(energies, T=T) for T in temperatures_K]
+
+
+def write_thermo_vs_T_csv(results: list[ThermoResult], out_path: Path) -> None:
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fieldnames = [
+        "temperature_K",
+        "num_configurations",
+        "mixing_energy_min_eV",
+        "mixing_energy_avg_eV",
+        "partition_function",
+        "free_energy_mix_eV",
+    ]
+
+    with out_path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for result in results:
+            writer.writerow(
+                {
+                    "temperature_K": result.temperature_K,
+                    "num_configurations": result.num_configurations,
+                    "mixing_energy_min_eV": result.mixing_energy_min_eV,
+                    "mixing_energy_avg_eV": result.mixing_energy_avg_eV,
+                    "partition_function": result.partition_function,
+                    "free_energy_mix_eV": result.free_energy_mix_eV,
+                }
+            )
+
+
+def plot_thermo_vs_T(results: list[ThermoResult], out_path: Path) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    temperatures = [r.temperature_K for r in results]
+    free_energies = [r.free_energy_mix_eV for r in results]
+    avg_energies = [r.mixing_energy_avg_eV for r in results]
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.plot(temperatures, free_energies, marker="o", label="free_energy_mix_eV")
+    ax.plot(temperatures, avg_energies, marker="s", label="mixing_energy_avg_eV")
+    ax.set_xlabel("temperature_K")
+    ax.set_ylabel("energy (eV)")
+    ax.set_title("Thermodynamics vs temperature")
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
