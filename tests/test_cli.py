@@ -241,17 +241,27 @@ def test_cli_analyze_fails_with_informative_validation_error(tmp_path: Path) -> 
     assert "missing required columns" in completed.stderr
 
 
-def test_cli_import_csv_into_run_dir(tmp_path: Path) -> None:
-    results_csv = tmp_path / "external_results.csv"
-    results_csv.write_text(
+def test_cli_import_csv_into_existing_run_writes_metadata(tmp_path: Path) -> None:
+    pytest.importorskip("pandas")
+
+    existing_csv = (
+        "structure_id,mechanism,energy_eV\n"
+        "demo_0001,baseline,-1.500\n"
+    )
+    imported_csv = (
         "structure_id,mechanism,energy_eV\n"
         "ext_0001,HPC,-1.234\n"
-        "ext_0002,HPC,-1.111\n",
-        encoding="utf-8",
+        "ext_0002,HPC,-1.111\n"
     )
 
     run_root = tmp_path / "runs"
     run_id = "imported-run"
+    run_path = run_root / run_id
+    (run_path / "inputs").mkdir(parents=True)
+    (run_path / "inputs" / "results.csv").write_text(existing_csv, encoding="utf-8")
+
+    source_csv = tmp_path / "external_results.csv"
+    source_csv.write_text(imported_csv, encoding="utf-8")
 
     _run_cli(
         "import",
@@ -260,33 +270,67 @@ def test_cli_import_csv_into_run_dir(tmp_path: Path) -> None:
         "--run-dir",
         str(run_root),
         "--results",
-        str(results_csv),
+        str(source_csv),
         cwd=tmp_path,
     )
 
-    run_path = run_root / run_id
     canonical_csv = run_path / "inputs" / "results.csv"
-    stored_source = run_path / "inputs" / "external_results.csv"
-    metadata_path = run_path / "inputs" / "import_metadata.json"
+    imported_target = run_path / "inputs" / "imported_results.csv"
+    metadata_path = run_path / "inputs" / "import.json"
     run_meta_path = run_path / "run.json"
 
-    assert canonical_csv.exists()
-    assert stored_source.exists()
+    assert canonical_csv.read_text(encoding="utf-8") == existing_csv
+    assert imported_target.read_text(encoding="utf-8") == imported_csv
     assert metadata_path.exists()
     assert run_meta_path.exists()
 
-    assert canonical_csv.read_text(encoding="utf-8") == results_csv.read_text(encoding="utf-8")
-
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    assert metadata["source_path"] == str(results_csv.resolve())
+    assert metadata["source_path"] == str(source_csv.resolve())
     assert metadata["format"] == ".csv"
+    assert metadata["results_csv"] == str(imported_target)
+    assert isinstance(metadata["sha256"], str)
+    assert len(metadata["sha256"]) == 64
+    assert "imported_at" in metadata
 
     run_meta = json.loads(run_meta_path.read_text(encoding="utf-8"))
     assert run_meta["command"] == "import"
     assert run_meta["run_id"] == run_id
+    assert run_meta["inputs_csv"] == str(imported_target)
+
+
+def test_cli_import_fails_when_results_file_is_missing(tmp_path: Path) -> None:
+    env = os.environ.copy()
+    src_path = str(REPO_ROOT / "src")
+    env["PYTHONPATH"] = src_path if not env.get("PYTHONPATH") else f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
+
+    missing = tmp_path / "no_such_file.csv"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "gan_mg.cli",
+            "import",
+            "--run-id",
+            "missing-import",
+            "--run-dir",
+            str(tmp_path / "runs"),
+            "--results",
+            str(missing),
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "Input validation error:" in completed.stderr
+    assert "Import path not found" in completed.stderr
 
 
 def test_cli_import_fails_on_invalid_csv_schema(tmp_path: Path) -> None:
+    pytest.importorskip("pandas")
     bad_csv = tmp_path / "external_results.csv"
     bad_csv.write_text(
         "structure_id,mechanism\n"
