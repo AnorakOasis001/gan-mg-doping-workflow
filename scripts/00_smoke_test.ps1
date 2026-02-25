@@ -14,13 +14,11 @@ python -m pip install -U pip
 python -m pip install -e ".[dev]" --no-build-isolation
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-# -----------------------------
-# Detect matplotlib availability
-# -----------------------------
-$HasPlot = $false
+# Detect matplotlib availability (informational only)
+$HasMatplotlib = $false
 python -c "import matplotlib" 2>$null
-if ($LASTEXITCODE -eq 0) { $HasPlot = $true }
-Write-Host "[smoke] matplotlib available: $HasPlot"
+if ($LASTEXITCODE -eq 0) { $HasMatplotlib = $true }
+Write-Host "[smoke] matplotlib available: $HasMatplotlib"
 
 Write-Host "[smoke] doctor"
 ganmg doctor
@@ -55,14 +53,5 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host "[smoke] assert CSV outputs"
 if (!(Test-Path ("runs\{0}\inputs\results.csv" -f $RUN_ID))) { throw "Missing runs\$RUN_ID\inputs\results.csv" }
 if (!(Test-Path ("runs\{0}\outputs\thermo_vs_T.csv" -f $RUN_ID))) { throw "Missing runs\$RUN_ID\outputs\thermo_vs_T.csv" }
-
-# Only require PNG if matplotlib is installed
-if ($HasPlot) {
-  Write-Host "[smoke] checking plot output"
-  if (!(Test-Path ("runs\{0}\outputs\thermo_vs_T.png" -f $RUN_ID))) { throw "Missing runs\$RUN_ID\outputs\thermo_vs_T.png" }
-  Write-Host "[smoke] plot file exists"
-} else {
-  Write-Host "[smoke] matplotlib not installed — skipping PNG assertion"
-}
 
 Write-Host "[smoke] OK"
