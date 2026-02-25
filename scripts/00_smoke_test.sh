@@ -5,27 +5,20 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 # -------------------------
-# Choose a Python interpreter that works on:
-# - Linux/macOS
-# - Windows Git Bash (MINGW)
-# Prefers the repo-local .venv if present.
-# You can also override by running:
-#   PYTHON=/path/to/python bash scripts/00_smoke_test.sh
+# Choose Python interpreter
 # -------------------------
 if [[ -n "${PYTHON:-}" ]]; then
-  : # use user-provided PYTHON
+  :
 elif [[ -x "./.venv/Scripts/python.exe" ]]; then
-  PYTHON="./.venv/Scripts/python.exe"          # Windows venv
+  PYTHON="./.venv/Scripts/python.exe"      # Windows venv
 elif [[ -x "./.venv/bin/python" ]]; then
-  PYTHON="./.venv/bin/python"                  # Linux/macOS venv
+  PYTHON="./.venv/bin/python"              # Linux/macOS venv
 elif command -v python3 >/dev/null 2>&1; then
   PYTHON="$(command -v python3)"
 elif command -v python >/dev/null 2>&1; then
   PYTHON="$(command -v python)"
 else
   echo "[smoke] ERROR: No Python found."
-  echo "        If you're on Windows Git Bash, make sure you created/activated .venv,"
-  echo "        or run with: PYTHON=./.venv/Scripts/python.exe bash scripts/00_smoke_test.sh"
   exit 1
 fi
 
@@ -34,14 +27,29 @@ echo "[smoke] python: $PYTHON"
 "$PYTHON" --version
 "$PYTHON" -m pip --version
 
-echo "[smoke] editable install"
+echo "[smoke] editable install (dev only)"
 "$PYTHON" -m pip install -U pip
 "$PYTHON" -m pip install -e ".[dev]" --no-build-isolation
 
-echo "[smoke] doctor"
-"$PYTHON" -m gan_mg.cli doctor --run-dir "runs"
+# --------------------------------------------------
+# Detect whether matplotlib (plot extra) is present
+# --------------------------------------------------
+if "$PYTHON" - <<EOF
+try:
+    import matplotlib
+    print("yes")
+except ImportError:
+    print("no")
+EOF
+then
+  HAS_PLOT="yes"
+else
+  HAS_PLOT="no"
+fi
 
-# Prefer module invocation (more reliable than relying on ganmg being on PATH in Git Bash)
+echo "[smoke] matplotlib available: $HAS_PLOT"
+
+# Prefer module invocation (robust)
 GANMG=( "$PYTHON" -m gan_mg.cli )
 
 RUN_ID="smoke"
@@ -51,11 +59,16 @@ TMIN="300"
 TMAX="1200"
 NT="10"
 
-# Clean previous smoke run (idempotent)
+# -------------------------
+# Clean previous run
+# -------------------------
 if [ -d "runs/$RUN_ID" ]; then
   echo "[smoke] removing existing runs/$RUN_ID"
   rm -rf "runs/$RUN_ID"
 fi
+
+echo "[smoke] doctor"
+"${GANMG[@]}" doctor --run-dir "runs"
 
 echo "[smoke] generate"
 "${GANMG[@]}" generate --run-id "$RUN_ID" --seed "$SEED"
@@ -64,16 +77,25 @@ echo "[smoke] analyze"
 "${GANMG[@]}" analyze --run-id "$RUN_ID" --T "$T"
 
 echo "[smoke] sweep"
-"${GANMG[@]}" sweep --run-id "$RUN_ID" --T-min "$TMIN" --T-max "$TMAX" --nT "$NT"
+"${GANMG[@]}" sweep \
+  --run-id "$RUN_ID" \
+  --T-min "$TMIN" \
+  --T-max "$TMAX" \
+  --nT "$NT"
 
-echo "[smoke] assert outputs"
+echo "[smoke] assert CSV outputs"
 test -f "runs/$RUN_ID/inputs/results.csv"
 test -f "runs/$RUN_ID/outputs/thermo_vs_T.csv"
 
-if test -f "runs/$RUN_ID/outputs/thermo_vs_T.png"; then
-  echo "[smoke] found thermo_vs_T.png"
+# --------------------------------------------------
+# Only require PNG if matplotlib is installed
+# --------------------------------------------------
+if [ "$HAS_PLOT" = "yes" ]; then
+  echo "[smoke] checking plot output"
+  test -f "runs/$RUN_ID/outputs/thermo_vs_T.png"
+  echo "[smoke] plot file exists"
 else
-  echo "[smoke] thermo_vs_T.png not found (ok if plotting not implemented)"
+  echo "[smoke] matplotlib not installed — skipping PNG assertion"
 fi
 
 echo "[smoke] OK"
