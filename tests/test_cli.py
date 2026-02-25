@@ -41,7 +41,9 @@ def test_cli_generate_analyze_sweep_end_to_end(tmp_path: Path) -> None:
     _run_cli("analyze", "--run-dir", str(run_dir), "--run-id", run_id, "--T", "298.15", cwd=tmp_path)
     thermo_files = list((run_path / "outputs").glob("thermo_T*.txt"))
     assert len(thermo_files) == 1
-    assert "T(K) = 298.15" in thermo_files[0].read_text(encoding="utf-8")
+    thermo_text = thermo_files[0].read_text(encoding="utf-8")
+    assert "temperature_K = 298.15" in thermo_text
+    assert "free_energy_mix_eV =" in thermo_text
 
     _run_cli("sweep", "--run-dir", str(run_dir), "--run-id", run_id, "--nT", "7", cwd=tmp_path)
 
@@ -51,3 +53,12 @@ def test_cli_generate_analyze_sweep_end_to_end(tmp_path: Path) -> None:
     with sweep_csv.open("r", encoding="utf-8", newline="") as f:
         rows = list(csv.DictReader(f))
     assert len(rows) == 7
+    expected_headers = {
+        "temperature_K",
+        "num_configurations",
+        "mixing_energy_min_eV",
+        "mixing_energy_avg_eV",
+        "partition_function",
+        "free_energy_mix_eV",
+    }
+    assert set(rows[0].keys()) == expected_headers
