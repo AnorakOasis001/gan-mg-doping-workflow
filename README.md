@@ -248,6 +248,22 @@ Both scripts execute the same deterministic workflow.
 
 ---
 
+
+## Documentation
+
+The project includes an MkDocs documentation site under `docs/` with pages for installation, CLI usage, API usage, thermodynamics math, and reproducibility philosophy.
+
+Build locally:
+
+```bash
+python -m pip install -e ".[docs]" --no-build-isolation
+mkdocs serve
+```
+
+GitHub Pages deployment is automated through `.github/workflows/docs.yml` on pushes to `main`.
+
+---
+
 ## Development
 
 Install with development extras:
