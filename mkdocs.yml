@@ -12,7 +12,9 @@ nav:
   - API usage: api-usage.md
   - Thermodynamics math: thermodynamics-math.md
   - Reproducibility philosophy: reproducibility-philosophy.md
-  - Performance & scaling: performance.md
+  - Performance & scaling:
+      - Overview: performance.md
+      - Benchmarking: performance-scaling.md
   - HPC mapping (Mg-doped GaN + MACE): hpc_mapping.md
 
 markdown_extensions:
