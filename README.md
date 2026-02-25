@@ -24,6 +24,33 @@ The project is intentionally structured to reflect research software engineering
 
 ---
 
+## Thermodynamics
+
+The workflow computes canonical Boltzmann statistics over mixing energies:
+
+\[
+Z = \sum_i \exp\left(-\frac{\Delta E_{\mathrm{mix},i}}{k_B T}\right)
+\]
+
+with exported naming:
+
+* `temperature_K`
+* `num_configurations`
+* `mixing_energy_min_eV`
+* `mixing_energy_avg_eV`
+* `partition_function`
+* `free_energy_mix_eV`
+
+The free energy is reported as:
+
+\[
+\mathrm{free\_energy\_mix\_eV} = -k_B T \ln Z
+\]
+
+This is the canonical Helmholtz free energy of mixing; for solids, the `PV` term is negligible, so it closely approximates Gibbs free energy.
+
+---
+
 ## Installation
 
 Python ≥ 3.10 required.

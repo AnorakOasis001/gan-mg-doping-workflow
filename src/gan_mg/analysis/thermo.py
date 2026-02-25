@@ -10,12 +10,12 @@ K_B_EV_PER_K = 8.617333262e-5  # Boltzmann constant in eV/K
 
 @dataclass(frozen=True)
 class ThermoResult:
-    T: float
-    n: int
-    emin: float
-    Z_tilde: float
-    E_avg: float
-    F: float
+    temperature_K: float
+    num_configurations: int
+    mixing_energy_min_eV: float
+    mixing_energy_avg_eV: float
+    partition_function: float
+    free_energy_mix_eV: float
 
 
 def read_energies_csv(csv_path: Path, energy_col: str = "energy_eV") -> list[float]:
@@ -47,9 +47,10 @@ def boltzmann_thermo_from_energies(energies: list[float], T: float) -> ThermoRes
     Uses a numerically-stable energy shift by Emin.
 
     Returns:
-      - Z_tilde = sum_i exp(-beta*(Ei - Emin))
-      - <E> in eV
-      - F in eV, where F = Emin - (1/beta)*ln(Z_tilde)
+      - partition_function = sum_i exp(-beta*(Ei - Emin))
+      - mixing_energy_avg_eV in eV
+      - free_energy_mix_eV in eV, where
+        free_energy_mix_eV = Emin - (1/beta)*ln(partition_function)
     """
     if T <= 0:
         raise ValueError("Temperature T must be > 0.")
@@ -59,14 +60,21 @@ def boltzmann_thermo_from_energies(energies: list[float], T: float) -> ThermoRes
 
     shifted = [e - emin for e in energies]
     weights = [math.exp(-beta * e) for e in shifted]
-    Z_tilde = sum(weights)
+    partition_function = sum(weights)
 
-    probs = [w / Z_tilde for w in weights]
-    E_avg = sum(p * e for p, e in zip(probs, energies))
+    probs = [w / partition_function for w in weights]
+    mixing_energy_avg_eV = sum(p * e for p, e in zip(probs, energies))
 
-    F = emin - (1.0 / beta) * math.log(Z_tilde)
+    free_energy_mix_eV = emin - (1.0 / beta) * math.log(partition_function)
 
-    return ThermoResult(T=T, n=len(energies), emin=emin, Z_tilde=Z_tilde, E_avg=E_avg, F=F)
+    return ThermoResult(
+        temperature_K=T,
+        num_configurations=len(energies),
+        mixing_energy_min_eV=emin,
+        mixing_energy_avg_eV=mixing_energy_avg_eV,
+        partition_function=partition_function,
+        free_energy_mix_eV=free_energy_mix_eV,
+    )
 
 
 def boltzmann_thermo_from_csv(csv_path: Path, T: float, energy_col: str = "energy_eV") -> ThermoResult:
@@ -79,22 +87,14 @@ def write_thermo_txt(result: ThermoResult, out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     out_path.write_text(
-        f"T(K) = {result.T}\n"
-        f"N    = {result.n}\n"
-        f"Emin (eV) = {result.emin:.6f}\n"
-        f"Z_tilde   = {result.Z_tilde:.6e}\n"
-        f"<E> (eV)  = {result.E_avg:.6f}\n"
-        f"F   (eV)  = {result.F:.6f}\n",
+        f"temperature_K = {result.temperature_K}\n"
+        f"num_configurations = {result.num_configurations}\n"
+        f"mixing_energy_min_eV = {result.mixing_energy_min_eV:.6f}\n"
+        f"partition_function = {result.partition_function:.6e}\n"
+        f"mixing_energy_avg_eV = {result.mixing_energy_avg_eV:.6f}\n"
+        f"free_energy_mix_eV = {result.free_energy_mix_eV:.6f}\n",
         encoding="utf-8",
     )
-
-def _get_attr(obj, names, default=None):
-    """Try multiple attribute names; return the first that exists."""
-    for n in names:
-        if hasattr(obj, n):
-            return getattr(obj, n)
-    return default
-
 
 def sweep_thermo_from_csv(
     csv_path: Path,
@@ -103,7 +103,6 @@ def sweep_thermo_from_csv(
 ) -> list[dict]:
     """
     Run boltzmann_thermo_from_csv for each temperature and return list of dict rows.
-    This wrapper is robust to different ThermoResult field names.
     """
     csv_path = Path(csv_path)
     rows: list[dict] = []
@@ -111,24 +110,18 @@ def sweep_thermo_from_csv(
     for T in T_values:
         res = boltzmann_thermo_from_csv(csv_path, T=T, energy_col=energy_col)
 
-        N = _get_attr(res, ["N", "n", "num_states"])
-        Emin = _get_attr(res, ["Emin_eV", "Emin", "emin_eV", "emin"])
-        Zt = _get_attr(res, ["Z_tilde", "Ztilde", "Z", "z_tilde"])
-        Eavg = _get_attr(res, ["Eavg_eV", "Eavg", "E_avg"])   # <-- add E_avg
-        F = _get_attr(res, ["F_eV", "F"])                      # <-- F is your field
-
         rows.append(
             {
-                "T_K": float(T),
-                "N": N,
-                "Emin_eV": Emin,
-                "Z_tilde": Zt,
-                "Eavg_eV": Eavg,
-                "F_eV": F,
+                "temperature_K": float(T),
+                "num_configurations": res.num_configurations,
+                "mixing_energy_min_eV": res.mixing_energy_min_eV,
+                "mixing_energy_avg_eV": res.mixing_energy_avg_eV,
+                "partition_function": res.partition_function,
+                "free_energy_mix_eV": res.free_energy_mix_eV,
             }
         )
 
-    rows.sort(key=lambda r: r["T_K"])
+    rows.sort(key=lambda r: r["temperature_K"])
     return rows
 
 
@@ -136,7 +129,14 @@ def write_thermo_vs_T_csv(rows: list[dict], out_csv: Path) -> None:
     out_csv = Path(out_csv)
     out_csv.parent.mkdir(parents=True, exist_ok=True)
 
-    fieldnames = ["T_K", "N", "Emin_eV", "Z_tilde", "Eavg_eV", "F_eV"]
+    fieldnames = [
+        "temperature_K",
+        "num_configurations",
+        "mixing_energy_min_eV",
+        "mixing_energy_avg_eV",
+        "partition_function",
+        "free_energy_mix_eV",
+    ]
     with out_csv.open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames)
         w.writeheader()
@@ -146,23 +146,22 @@ def write_thermo_vs_T_csv(rows: list[dict], out_csv: Path) -> None:
 
 def plot_thermo_vs_T(rows: list[dict], out_png: Path) -> None:
     import matplotlib
+
     matplotlib.use("Agg")  # headless backend (CI-safe)
     import matplotlib.pyplot as plt
-    from pathlib import Path
 
-    # Debug: validate keys once
-    required = {"T_K", "F_eV", "Eavg_eV"}
+    required = {"temperature_K", "free_energy_mix_eV", "mixing_energy_avg_eV"}
     missing = [required - set(r.keys()) for r in rows[:1]]
     if missing and missing[0]:
         raise KeyError(f"Row is missing keys {missing[0]}. Row keys are: {list(rows[0].keys())}")
 
-    T = [r["T_K"] for r in rows]
-    F = [r["F_eV"] for r in rows]
-    E = [r["Eavg_eV"] for r in rows]
+    temperature_K = [r["temperature_K"] for r in rows]
+    free_energy_mix_eV = [r["free_energy_mix_eV"] for r in rows]
+    mixing_energy_avg_eV = [r["mixing_energy_avg_eV"] for r in rows]
 
     plt.figure()
-    plt.plot(T, F, label="F (eV)")
-    plt.plot(T, E, label="<E> (eV)")
+    plt.plot(temperature_K, free_energy_mix_eV, label="free_energy_mix_eV")
+    plt.plot(temperature_K, mixing_energy_avg_eV, label="mixing_energy_avg_eV")
     plt.xlabel("Temperature (K)")
     plt.ylabel("Energy (eV)")
     plt.legend()
