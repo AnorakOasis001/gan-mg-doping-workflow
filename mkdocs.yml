@@ -1,0 +1,23 @@
+site_name: gan-mg-doping-workflow
+site_description: Reproducible scientific ML workflow for Mg-doped GaN thermodynamics.
+
+theme:
+  name: material
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - CLI usage: cli-usage.md
+  - API usage: api-usage.md
+  - Thermodynamics math: thermodynamics-math.md
+  - Reproducibility philosophy: reproducibility-philosophy.md
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
