@@ -134,6 +134,42 @@ ganmg sweep \
 
 ---
 
+## Python API
+
+You can use the thermodynamics workflow directly from Python without invoking the CLI.
+
+```python
+from gan_mg import analyze_from_csv, sweep_from_csv
+
+single = analyze_from_csv("runs/demo/inputs/results.csv", temperature_K=1000.0)
+print(single.result.free_energy_mix_eV)
+
+sweep = sweep_from_csv(
+    "runs/demo/inputs/results.csv",
+    temperatures_K=[300.0, 600.0, 900.0, 1200.0],
+)
+for row in sweep.results:
+    print(row.temperature_K, row.free_energy_mix_eV)
+```
+
+API return types are structured dataclasses:
+
+* `AnalyzeResponse(csv_path, energy_col, result)`
+* `SweepResponse(csv_path, energy_col, results)`
+
+Each `result`/`results` item is a `ThermoResult` dataclass containing:
+
+* `temperature_K`
+* `num_configurations`
+* `mixing_energy_min_eV`
+* `mixing_energy_avg_eV`
+* `partition_function`
+* `free_energy_mix_eV`
+
+The API functions are side-effect free: they do not print/log or write output files.
+
+---
+
 ## Architecture
 
 High-level execution flow:
