@@ -22,6 +22,7 @@ from gan_mg.analysis.thermo import (
     write_thermo_vs_T_csv,
 )
 from gan_mg.demo.generate import generate_demo_csv
+from gan_mg.analysis.figures import regenerate_thermo_figure
 from gan_mg.import_results import import_results_to_run
 from gan_mg.run import (
     init_run,
@@ -151,6 +152,26 @@ def build_sweep_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentP
     )
     return parser
 
+
+
+
+def build_plot_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser(
+        "plot",
+        help="Regenerate key figures from a run.",
+    )
+    add_run_args(parser)
+    parser.add_argument(
+        "--kind",
+        choices=["thermo"],
+        default="thermo",
+        help="Figure kind to regenerate.",
+    )
+    parser.add_argument("--energy-col", default="energy_eV")
+    parser.add_argument("--T-min", type=float, default=300.0, dest="T_min")
+    parser.add_argument("--T-max", type=float, default=1500.0, dest="T_max")
+    parser.add_argument("--nT", type=int, default=25)
+    return parser
 
 def build_doctor_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> argparse.ArgumentParser:
     parser = subparsers.add_parser(
@@ -369,6 +390,40 @@ def handle_sweep(args: argparse.Namespace) -> None:
         log_profile("sweep", stage_start, num_configurations=num_configurations)
 
 
+
+
+def handle_plot(args: argparse.Namespace) -> None:
+    if args.run_id is None:
+        args.run_id = latest_run_id(Path(args.run_dir))
+
+    run_dir = Path(args.run_dir) / args.run_id
+    if not run_dir.exists():
+        raise SystemExit(f"Run not found: {run_dir}")
+
+    if args.kind == "thermo":
+        try:
+            out_png = regenerate_thermo_figure(
+                run_dir=run_dir,
+                energy_col=args.energy_col,
+                t_min=args.T_min,
+                t_max=args.T_max,
+                n_t=args.nT,
+            )
+        except ModuleNotFoundError as e:
+            raise SystemExit(
+                "Plotting requires matplotlib. Install with:\n"
+                "  python -m pip install -e '.[plot]'\n"
+                "or\n"
+                "  python -m pip install -e '.[dev,plot]'\n"
+            ) from e
+        except ValueError as e:
+            raise SystemExit(f"Input validation error: {e}") from e
+
+        logger.info("Wrote: %s", out_png)
+        return
+
+    raise SystemExit(f"Unsupported --kind: {args.kind}")
+
 def handle_doctor(args: argparse.Namespace) -> None:
     logger.info("ganmg doctor")
     logger.info("%s", "-" * 60)
@@ -555,6 +610,7 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser, ar
     build_analyze_parser(subparsers)
     runs_parser = build_runs_parser(subparsers)
     build_sweep_parser(subparsers)
+    build_plot_parser(subparsers)
     build_doctor_parser(subparsers)
     build_import_parser(subparsers)
     bench_parser = build_bench_parser(subparsers)
@@ -573,6 +629,8 @@ def main() -> None:
         handle_analyze(args)
     elif args.command == "sweep":
         handle_sweep(args)
+    elif args.command == "plot":
+        handle_plot(args)
     elif args.command == "doctor":
         handle_doctor(args)
     elif args.command == "runs":

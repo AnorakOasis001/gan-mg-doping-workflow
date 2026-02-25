@@ -8,6 +8,7 @@ nav:
   - Home: index.md
   - Installation: installation.md
   - CLI usage: cli-usage.md
+  - Gallery: gallery.md
   - API usage: api-usage.md
   - Thermodynamics math: thermodynamics-math.md
   - Reproducibility philosophy: reproducibility-philosophy.md
