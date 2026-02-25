@@ -9,10 +9,18 @@ Write-Host "[smoke] repo: $RepoRoot"
 python --version
 python -m pip --version
 
-Write-Host "[smoke] editable install"
+Write-Host "[smoke] editable install (dev only)"
 python -m pip install -U pip
 python -m pip install -e ".[dev]" --no-build-isolation
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+# -----------------------------
+# Detect matplotlib availability
+# -----------------------------
+$HasPlot = $false
+python -c "import matplotlib" 2>$null
+if ($LASTEXITCODE -eq 0) { $HasPlot = $true }
+Write-Host "[smoke] matplotlib available: $HasPlot"
 
 Write-Host "[smoke] doctor"
 ganmg doctor
@@ -44,15 +52,17 @@ Write-Host "[smoke] sweep"
 ganmg sweep --run-id $RUN_ID --T-min $TMIN --T-max $TMAX --nT $NT
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "[smoke] assert outputs"
+Write-Host "[smoke] assert CSV outputs"
 if (!(Test-Path ("runs\{0}\inputs\results.csv" -f $RUN_ID))) { throw "Missing runs\$RUN_ID\inputs\results.csv" }
 if (!(Test-Path ("runs\{0}\outputs\thermo_vs_T.csv" -f $RUN_ID))) { throw "Missing runs\$RUN_ID\outputs\thermo_vs_T.csv" }
 
-# Optional: if your sweep currently writes a png, keep this. If not, comment it out.
-if (Test-Path ("runs\{0}\outputs\thermo_vs_T.png" -f $RUN_ID)) {
-  Write-Host "[smoke] found thermo_vs_T.png"
+# Only require PNG if matplotlib is installed
+if ($HasPlot) {
+  Write-Host "[smoke] checking plot output"
+  if (!(Test-Path ("runs\{0}\outputs\thermo_vs_T.png" -f $RUN_ID))) { throw "Missing runs\$RUN_ID\outputs\thermo_vs_T.png" }
+  Write-Host "[smoke] plot file exists"
 } else {
-  Write-Host "[smoke] thermo_vs_T.png not found (ok if plotting not implemented)"
+  Write-Host "[smoke] matplotlib not installed — skipping PNG assertion"
 }
 
 Write-Host "[smoke] OK"
