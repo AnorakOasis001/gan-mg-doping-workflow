@@ -180,6 +180,17 @@ ganmg sweep \
   [--plot]
 ```
 
+
+### Bench
+
+Run a lightweight synthetic performance check for thermodynamics sweeps.
+
+```bash
+ganmg bench thermo --n 1000 --nT 50
+```
+
+Writes `outputs/bench.json` with timings and environment metadata.
+
 ### Runs
 
 Inspect run history and show metadata + latest standardized metrics summary.

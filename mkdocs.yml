@@ -11,6 +11,7 @@ nav:
   - API usage: api-usage.md
   - Thermodynamics math: thermodynamics-math.md
   - Reproducibility philosophy: reproducibility-philosophy.md
+  - Performance & scaling: performance-scaling.md
 
 markdown_extensions:
   - admonition
