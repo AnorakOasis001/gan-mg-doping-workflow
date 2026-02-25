@@ -80,6 +80,21 @@ Recommended pattern:
 
 ## Real workflow outline
 
+```mermaid
+flowchart LR
+    A[Config generation\nseed + config_set] --> B[Run folder\nruns/&lt;id&gt;/]
+
+    B --> C1[Toy backend\nlocal synthetic energies]
+    B --> C2[Real MACE backend\nHPC relax + energy eval]
+
+    C1 --> D[Import\nresults.csv in runs/&lt;id&gt;/inputs/]
+    C2 --> D
+
+    D --> E[Thermo analysis\nganmg analyze / sweep]
+    E --> F[Plots + metrics\nfigures, metrics.json]
+    F --> G[Docs + reports\nMkDocs pages / artifacts]
+```
+
 1. **Generate configurations** locally or on the cluster.
 2. **Relax and evaluate energies on HPC** with Janus-core/MACE (often via SLURM arrays).
 3. **Import results back** into `runs/<id>/inputs/results.csv` with `ganmg import`.
