@@ -12,6 +12,13 @@ For a real workflow, Janus-core + MACE is the **energy + relaxation backend** th
 
 ### Practical integration point
 
+#### Current repository status for `--model mace`
+
+The CLI now exposes a placeholder backend at `src/gan_mg/models/mace_backend.py` (`MACEBackend`).
+
+- Selecting `ganmg generate --model mace` intentionally fails with a clear `NotImplementedError` message.
+- This is a guardrail: real MACE evaluation should run on HPC, and resulting energies should be brought back with `ganmg import`.
+
 1. Generate candidate Mg-doped GaN structures (locally or on cluster).
 2. Run structure relaxation and final energy evaluation on HPC using Janus-core/MACE.
 3. Export one row per configuration with at least:
