@@ -146,7 +146,7 @@ def write_thermo_vs_T_csv(rows: list[dict], out_csv: Path) -> None:
 
 def plot_thermo_vs_T(rows: list[dict], out_png: Path) -> None:
     import matplotlib
-    matplotlib.use("Agg")
+    matplotlib.use("Agg")  # headless backend (CI-safe)
     import matplotlib.pyplot as plt
     from pathlib import Path
 

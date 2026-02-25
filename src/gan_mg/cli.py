@@ -73,6 +73,11 @@ def main() -> None:
     sw.add_argument("--T-max", type=float, default=1500.0, dest="T_max")
     sw.add_argument("--nT", type=int, default=25)
     sw.add_argument("--energy-col", default="energy_eV")
+    sw.add_argument(
+        "--plot",
+        action="store_true",
+        help="Write a PNG plot (requires optional dependency: gan-mg-doping-workflow[plot]).",
+    )
 
     # ---- doctor ----
     doc = subparsers.add_parser(
@@ -149,10 +154,20 @@ def main() -> None:
         rows = sweep_thermo_from_csv(csv_path, T_values, energy_col=args.energy_col)
 
         write_thermo_vs_T_csv(rows, out_csv)
-        plot_thermo_vs_T(rows, out_png)
-
         print(f"Wrote: {out_csv}")
-        print(f"Wrote: {out_png}")
+
+        if args.plot:
+            try:
+                plot_thermo_vs_T(rows, out_png)
+                print(f"Wrote: {out_png}")
+            except ModuleNotFoundError as e:
+                # Matplotlib is an optional dependency
+                raise SystemExit(
+                    "Plotting requires matplotlib. Install with:\n"
+                    "  python -m pip install -e '.[plot]'\n"
+                    "or\n"
+                    "  python -m pip install -e '.[dev,plot]'\n"
+                ) from e
 
     elif args.command == "doctor":
         print("ganmg doctor")
