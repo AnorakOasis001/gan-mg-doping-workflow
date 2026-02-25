@@ -5,6 +5,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any, TypedDict, cast
 
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,14 @@ class RunPaths:
     inputs_dir: Path
     outputs_dir: Path
     meta_path: Path
+
+
+class RunMeta(TypedDict, total=False):
+    command: str
+    run_id: str
+    n: int
+    seed: int
+    inputs_csv: str
 
 
 def make_run_id(seed: int | None = None, n: int | None = None) -> str:
@@ -40,7 +49,7 @@ def init_run(run_root: Path, run_id: str) -> RunPaths:
     return RunPaths(run_dir=run_dir, inputs_dir=inputs_dir, outputs_dir=outputs_dir, meta_path=meta_path)
 
 
-def write_run_meta(meta_path: Path, meta: dict) -> None:
+def write_run_meta(meta_path: Path, meta: RunMeta) -> None:
     logger.debug("Writing run metadata to %s", meta_path)
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
@@ -71,11 +80,12 @@ def latest_run_id(run_root: Path) -> str:
     return latest.name
 
 
-def load_run_meta(run_dir: Path) -> dict:
+def load_run_meta(run_dir: Path) -> RunMeta:
     """Load run.json metadata for a given run directory."""
     meta_path = run_dir / "run.json"
     if not meta_path.exists():
         logger.debug("No run metadata file at %s", meta_path)
         return {}
     logger.debug("Loading run metadata from %s", meta_path)
-    return json.loads(meta_path.read_text(encoding="utf-8"))
+    raw_meta: dict[str, Any] = json.loads(meta_path.read_text(encoding="utf-8"))
+    return cast(RunMeta, raw_meta)

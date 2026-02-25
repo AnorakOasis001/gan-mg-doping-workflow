@@ -43,6 +43,9 @@ jobs:
           fi
         shell: bash
 
+      - name: Run mypy
+        run: python -m mypy src/
+
       - name: Run pytest
         run: python -m pytest -q
 

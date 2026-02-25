@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import importlib.util
 import logging
@@ -32,6 +34,7 @@ LOG_LEVELS = {
 logger = logging.getLogger(__name__)
 
 
+
 def configure_logging(verbose: bool, quiet: bool) -> int:
     if verbose and quiet:
         raise SystemExit("--verbose and --quiet cannot be used together")
@@ -58,7 +61,7 @@ def add_run_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def build_generate_parser(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:
+def build_generate_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> argparse.ArgumentParser:
     parser = subparsers.add_parser(
         "generate", help="Generate a demo dataset (CSV) into a run folder."
     )
@@ -68,7 +71,7 @@ def build_generate_parser(subparsers: argparse._SubParsersAction) -> argparse.Ar
     return parser
 
 
-def build_analyze_parser(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:
+def build_analyze_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> argparse.ArgumentParser:
     parser = subparsers.add_parser(
         "analyze",
         help="Run Boltzmann analysis; defaults to latest run if not specified.",
@@ -84,7 +87,7 @@ def build_analyze_parser(subparsers: argparse._SubParsersAction) -> argparse.Arg
     return parser
 
 
-def build_runs_parser(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:
+def build_runs_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> argparse.ArgumentParser:
     parser = subparsers.add_parser("runs", help="Inspect available runs.")
     runs_sub = parser.add_subparsers(dest="runs_command")
     runs_sub.add_parser("list", help="List all runs with metadata.")
@@ -92,7 +95,7 @@ def build_runs_parser(subparsers: argparse._SubParsersAction) -> argparse.Argume
     return parser
 
 
-def build_sweep_parser(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:
+def build_sweep_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> argparse.ArgumentParser:
     parser = subparsers.add_parser(
         "sweep", help="Compute thermo across a temperature range and save CSV/plot."
     )
@@ -112,7 +115,7 @@ def build_sweep_parser(subparsers: argparse._SubParsersAction) -> argparse.Argum
     return parser
 
 
-def build_doctor_parser(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:
+def build_doctor_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> argparse.ArgumentParser:
     parser = subparsers.add_parser(
         "doctor", help="Print environment diagnostics for reproducibility."
     )
