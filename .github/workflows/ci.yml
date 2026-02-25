@@ -30,6 +30,9 @@ jobs:
           fi
         shell: bash
 
+      - name: Run pytest
+        run: python -m pytest -q
+
       - name: Run smoke test (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
