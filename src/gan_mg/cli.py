@@ -1,7 +1,16 @@
 import argparse
+import sys
+import platform
+import importlib.util
 from pathlib import Path
 
-from gan_mg.analysis.thermo import boltzmann_thermo_from_csv, write_thermo_txt, sweep_thermo_from_csv, write_thermo_vs_T_csv, plot_thermo_vs_T
+from gan_mg.analysis.thermo import (
+    boltzmann_thermo_from_csv,
+    write_thermo_txt,
+    sweep_thermo_from_csv,
+    write_thermo_vs_T_csv,
+    plot_thermo_vs_T,
+)
 from gan_mg.demo.generate import generate_demo_csv
 from gan_mg.run import (
     init_run,
@@ -11,7 +20,6 @@ from gan_mg.run import (
     list_runs,
     load_run_meta,
 )
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="ganmg")
@@ -65,6 +73,12 @@ def main() -> None:
     sw.add_argument("--T-max", type=float, default=1500.0, dest="T_max")
     sw.add_argument("--nT", type=int, default=25)
     sw.add_argument("--energy-col", default="energy_eV")
+
+    # ---- doctor ----
+    doc = subparsers.add_parser(
+        "doctor", help="Print environment diagnostics for reproducibility."
+    )
+    doc.add_argument("--run-dir", default="runs", help="Root directory to store runs.")
 
     args = parser.parse_args()
 
@@ -139,6 +153,29 @@ def main() -> None:
 
         print(f"Wrote: {out_csv}")
         print(f"Wrote: {out_png}")
+
+    elif args.command == "doctor":
+        print("ganmg doctor")
+        print("-" * 60)
+
+        print(f"python_executable : {sys.executable}")
+        print(f"python_version    : {sys.version.split()[0]}")
+        print(f"platform          : {platform.platform()}")
+        print(f"cwd               : {Path.cwd()}")
+
+        try:
+            import gan_mg
+            pkg_path = Path(gan_mg.__file__).resolve()
+            print(f"gan_mg_package    : {pkg_path}")
+        except Exception as e:
+            print(f"gan_mg_package    : <ERROR> {e}")
+
+        mpl = importlib.util.find_spec("matplotlib")
+        print(f"matplotlib        : {'available' if mpl is not None else 'missing'}")
+
+        print(f"default_run_dir   : {Path(args.run_dir).resolve()}")
+
+        print("-" * 60)
 
     elif args.command == "runs":
         run_root = Path(args.run_dir) if hasattr(args, "run_dir") else Path("runs")

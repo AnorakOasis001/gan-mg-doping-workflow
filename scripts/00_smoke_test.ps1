@@ -14,6 +14,10 @@ python -m pip install -U pip
 python -m pip install -e ".[dev]" --no-build-isolation
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+Write-Host "[smoke] doctor"
+ganmg doctor
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 $RUN_ID = "smoke"
 $SEED  = "123"
 $T     = "1000"

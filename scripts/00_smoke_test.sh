@@ -38,6 +38,9 @@ echo "[smoke] editable install"
 "$PYTHON" -m pip install -U pip
 "$PYTHON" -m pip install -e ".[dev]" --no-build-isolation
 
+echo "[smoke] doctor"
+"$PYTHON" -m gan_mg.cli doctor --run-dir "runs"
+
 # Prefer module invocation (more reliable than relying on ganmg being on PATH in Git Bash)
 GANMG=( "$PYTHON" -m gan_mg.cli )
 
