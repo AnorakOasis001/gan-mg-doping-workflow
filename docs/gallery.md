@@ -13,3 +13,7 @@ The command writes figures into the run-local gallery directory:
 Example thermodynamic figure:
 
 ![Example thermo_vs_T figure](assets/thermo-example.svg)
+
+For a fully self-contained, synthetic-data walkthrough (public API only), see:
+
+- `docs/examples/thermo_analysis_synthetic.ipynb`
