@@ -4,7 +4,10 @@ import csv
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 K_B_EV_PER_K = 8.617333262e-5  # Boltzmann constant in eV/K
 
@@ -28,27 +31,71 @@ class ThermoSweepRow(TypedDict):
     free_energy_mix_eV: float
 
 
+REQUIRED_RESULTS_COLUMNS = ("structure_id", "mechanism", "energy_eV")
+
+
+def validate_results_dataframe(df: "pd.DataFrame") -> None:
+    """
+    Validate the expected thermodynamic input table.
+
+    Checks:
+    - required columns are present
+    - at least one row exists
+    - no NaN values in required columns
+    - energy_eV is numeric
+    """
+    import pandas as pd
+
+    if df.empty:
+        raise ValueError("results.csv must contain at least 1 row.")
+
+    missing_columns = [column for column in REQUIRED_RESULTS_COLUMNS if column not in df.columns]
+    if missing_columns:
+        raise ValueError(
+            "results.csv is missing required columns: "
+            f"{', '.join(missing_columns)}"
+        )
+
+    required_frame = df.loc[:, REQUIRED_RESULTS_COLUMNS]
+    nan_columns = required_frame.columns[required_frame.isna().any()].tolist()
+    if nan_columns:
+        raise ValueError(
+            "results.csv contains NaN values in required columns: "
+            f"{', '.join(nan_columns)}"
+        )
+
+    energy_as_numeric = pd.to_numeric(required_frame["energy_eV"], errors="coerce")
+    if energy_as_numeric.isna().any():
+        raise ValueError("Column 'energy_eV' must contain numeric values.")
+
+
 def read_energies_csv(csv_path: Path, energy_col: str = "energy_eV") -> list[float]:
     """
     Read energies (eV) from a CSV file.
     Expects a column named `energy_col` (default: energy_eV).
     """
+    import pandas as pd
+
     csv_path = Path(csv_path)
     if not csv_path.exists():
         raise FileNotFoundError(f"CSV not found: {csv_path}")
 
-    energies: list[float] = []
     with csv_path.open("r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        if reader.fieldnames is None or energy_col not in reader.fieldnames:
-            raise ValueError(f"CSV must contain column '{energy_col}'. Found: {reader.fieldnames}")
+        rows = [dict(row) for row in reader]
+        fieldnames = [] if reader.fieldnames is None else list(reader.fieldnames)
 
-        for row in reader:
-            energies.append(float(row[energy_col]))
+    df = pd.DataFrame(rows, columns=fieldnames)
+    validate_results_dataframe(df)
 
-    if not energies:
-        raise ValueError("No energies found in CSV.")
-    return energies
+    if energy_col not in df.columns:
+        raise ValueError(f"results.csv must contain column '{energy_col}'.")
+
+    energy_series = pd.to_numeric(df[energy_col], errors="coerce")
+    if energy_series.isna().any():
+        raise ValueError(f"Column '{energy_col}' must contain numeric values and no NaN entries.")
+
+    return [float(value) for value in energy_series.astype(float).tolist()]
 
 
 def boltzmann_thermo_from_energies(energies: list[float], T: float) -> ThermoResult:
@@ -106,6 +153,7 @@ def write_thermo_txt(result: ThermoResult, out_path: Path) -> None:
         encoding="utf-8",
     )
 
+
 def sweep_thermo_from_csv(
     csv_path: Path,
     T_values: list[float],
@@ -115,10 +163,11 @@ def sweep_thermo_from_csv(
     Run boltzmann_thermo_from_csv for each temperature and return list of dict rows.
     """
     csv_path = Path(csv_path)
+    energies = read_energies_csv(csv_path, energy_col=energy_col)
     rows: list[ThermoSweepRow] = []
 
     for T in T_values:
-        res = boltzmann_thermo_from_csv(csv_path, T=T, energy_col=energy_col)
+        res = boltzmann_thermo_from_energies(energies, T=T)
 
         rows.append(
             {
