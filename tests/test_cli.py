@@ -25,12 +25,13 @@ def _run_cli(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_cli_generate_analyze_sweep_end_to_end(tmp_path: Path) -> None:
+@pytest.mark.parametrize('model', ['demo', 'toy'])
+def test_cli_generate_analyze_sweep_end_to_end(tmp_path: Path, model: str) -> None:
     pytest.importorskip("pandas")
     run_dir = tmp_path / "runs"
     run_id = "pytest-run"
 
-    _run_cli("generate", "--run-dir", str(run_dir), "--run-id", run_id, "--n", "6", "--seed", "11", cwd=tmp_path)
+    _run_cli("generate", "--run-dir", str(run_dir), "--run-id", run_id, "--n", "6", "--seed", "11", "--model", model, cwd=tmp_path)
 
     run_path = run_dir / run_id
     meta_path = run_path / "run.json"
@@ -40,6 +41,7 @@ def test_cli_generate_analyze_sweep_end_to_end(tmp_path: Path) -> None:
 
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     assert meta["run_id"] == run_id
+    assert meta["model"] == model
 
     _run_cli("analyze", "--run-dir", str(run_dir), "--run-id", run_id, "--T", "298.15", cwd=tmp_path)
     thermo_files = list((run_path / "outputs").glob("thermo_T*.txt"))

@@ -30,7 +30,12 @@ ganmg = "gan_mg.cli:main"
 python_version = "3.10"
 strict = true
 files = ["src"]
+disable_error_code = ["import-untyped"]
 
 [[tool.mypy.overrides]]
 module = ["matplotlib", "matplotlib.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["pandas", "pandas.*"]
 ignore_missing_imports = true
