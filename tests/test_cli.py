@@ -91,3 +91,25 @@ def test_cli_verbose_and_quiet_flags_conflict(tmp_path: Path) -> None:
 
     assert completed.returncode != 0
     assert "--verbose and --quiet cannot be used together" in completed.stderr
+
+
+def test_cli_analyze_fails_with_informative_validation_error(tmp_path: Path) -> None:
+    bad_csv = tmp_path / "results.csv"
+    bad_csv.write_text("structure_id,mechanism\ndemo_0001,MgGa+VN\n", encoding="utf-8")
+
+    env = os.environ.copy()
+    src_path = str(REPO_ROOT / "src")
+    env["PYTHONPATH"] = src_path if not env.get("PYTHONPATH") else f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
+
+    completed = subprocess.run(
+        [sys.executable, "-m", "gan_mg.cli", "analyze", "--csv", str(bad_csv)],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "Input validation error:" in completed.stderr
+    assert "missing required columns" in completed.stderr

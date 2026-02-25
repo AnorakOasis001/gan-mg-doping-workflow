@@ -157,7 +157,11 @@ def handle_analyze(args: argparse.Namespace) -> None:
         csv_path = Path(args.csv)
         out_txt = Path("results") / "tables" / "demo_thermo.txt"
 
-    result = boltzmann_thermo_from_csv(csv_path, T=args.T, energy_col=args.energy_col)
+    try:
+        result = boltzmann_thermo_from_csv(csv_path, T=args.T, energy_col=args.energy_col)
+    except ValueError as e:
+        raise SystemExit(f"Input validation error: {e}") from e
+
     write_thermo_txt(result, out_txt)
     logger.info("%s", out_txt.read_text(encoding="utf-8"))
 
@@ -184,7 +188,10 @@ def handle_sweep(args: argparse.Namespace) -> None:
         for i in range(args.nT)
     ]
 
-    rows = sweep_thermo_from_csv(csv_path, t_values, energy_col=args.energy_col)
+    try:
+        rows = sweep_thermo_from_csv(csv_path, t_values, energy_col=args.energy_col)
+    except ValueError as e:
+        raise SystemExit(f"Input validation error: {e}") from e
 
     write_thermo_vs_T_csv(rows, out_csv)
     logger.info("Wrote: %s", out_csv)

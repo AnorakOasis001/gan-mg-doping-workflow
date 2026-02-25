@@ -2,7 +2,11 @@ import math
 
 import pytest
 
-from gan_mg.analysis.thermo import K_B_EV_PER_K, boltzmann_thermo_from_energies
+from gan_mg.analysis.thermo import (
+    K_B_EV_PER_K,
+    boltzmann_thermo_from_energies,
+    validate_results_dataframe,
+)
 
 
 def _probabilities(energies: list[float], temperature: float) -> list[float]:
@@ -45,3 +49,30 @@ def test_free_energy_matches_analytic_formula() -> None:
     expected = -K_B_EV_PER_K * temperature * math.log(result.partition_function) + result.mixing_energy_min_eV
 
     assert result.free_energy_mix_eV == pytest.approx(expected)
+
+
+def test_validate_results_dataframe_missing_column() -> None:
+    df = [{"structure_id": "demo_0001", "energy_eV": -0.123}]
+
+    with pytest.raises(ValueError, match="missing required columns: mechanism"):
+        validate_results_dataframe(df)
+
+
+def test_validate_results_dataframe_empty_dataframe() -> None:
+    df: list[dict[str, object]] = []
+
+    with pytest.raises(ValueError, match="at least 1 row"):
+        validate_results_dataframe(df)
+
+
+def test_validate_results_dataframe_nan_values() -> None:
+    df = [
+        {
+            "structure_id": "demo_0001",
+            "mechanism": "MgGa+VN",
+            "energy_eV": float("nan"),
+        }
+    ]
+
+    with pytest.raises(ValueError, match="NaN values"):
+        validate_results_dataframe(df)
