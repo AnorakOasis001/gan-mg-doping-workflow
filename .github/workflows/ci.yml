@@ -16,9 +16,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Prepare pip cache key inputs
+        shell: pwsh
+        run: |
+          # setup-python cache keys include OS and Python version automatically.
+          # We write the matrix mode into a tracked dependency-path input so
+          # `core` and `plot` caches are separated and cache hits are visible on reruns.
+          "mode=${{ matrix.mode }}" | Out-File -FilePath .pip-cache-key.txt -Encoding utf8
+          "python=3.12" | Out-File -FilePath .pip-cache-key.txt -Append -Encoding utf8
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            .pip-cache-key.txt
 
       - name: Install dependencies
         run: |
