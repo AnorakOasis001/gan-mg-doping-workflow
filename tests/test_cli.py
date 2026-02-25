@@ -298,6 +298,36 @@ def test_cli_import_csv_into_existing_run_writes_metadata(tmp_path: Path) -> Non
     assert run_meta["inputs_csv"] == str(imported_target)
 
 
+def test_cli_generate_mace_fails_with_dependency_hint(tmp_path: Path) -> None:
+    env = os.environ.copy()
+    src_path = str(REPO_ROOT / "src")
+    env["PYTHONPATH"] = src_path if not env.get("PYTHONPATH") else f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "gan_mg.cli",
+            "generate",
+            "--run-dir",
+            str(tmp_path / "runs"),
+            "--run-id",
+            "mace-placeholder",
+            "--model",
+            "mace",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "placeholder" in completed.stderr
+    assert "janus-core" in completed.stderr
+    assert "ganmg import" in completed.stderr
+
 def test_cli_import_fails_when_results_file_is_missing(tmp_path: Path) -> None:
     env = os.environ.copy()
     src_path = str(REPO_ROOT / "src")
