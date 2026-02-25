@@ -19,6 +19,7 @@ from gan_mg.analysis.thermo import (
     write_thermo_vs_T_csv,
 )
 from gan_mg.demo.generate import generate_demo_csv
+from gan_mg.import_results import import_results_to_run
 from gan_mg.run import (
     init_run,
     compute_reproducibility_hash,
@@ -153,6 +154,21 @@ def build_doctor_parser(subparsers: argparse._SubParsersAction[argparse.Argument
         "doctor", help="Print environment diagnostics for reproducibility."
     )
     parser.add_argument("--run-dir", default="runs", help="Root directory to store runs.")
+    return parser
+
+
+def build_import_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser(
+        "import",
+        help="Import external results file (.csv or .extxyz) into a run directory.",
+    )
+    parser.add_argument("--run-id", required=True, help="Run id to import data into.")
+    parser.add_argument("--run-dir", required=True, help="Root directory containing run folders.")
+    parser.add_argument(
+        "--results",
+        required=True,
+        help="Path to external results input (.csv or .extxyz/.xyz).",
+    )
     return parser
 
 
@@ -403,6 +419,27 @@ def handle_runs(args: argparse.Namespace, runs_parser: argparse.ArgumentParser) 
         runs_parser.print_help()
 
 
+def handle_import(args: argparse.Namespace) -> None:
+    run_dir = Path(args.run_dir) / args.run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        metadata = import_results_to_run(run_dir=run_dir, source_path=Path(args.results))
+    except (ValueError, FileNotFoundError) as e:
+        raise SystemExit(f"Input validation error: {e}") from e
+
+    meta = load_run_meta(run_dir)
+    meta["command"] = "import"
+    meta["run_id"] = args.run_id
+    meta["inputs_csv"] = str(run_dir / "inputs" / "results.csv")
+    write_run_meta(run_dir / "run.json", meta)
+
+    logger.info("Run import complete: %s", run_dir)
+    logger.info("Imported source: %s", metadata["source_path"])
+    logger.info("Stored source: %s", metadata["stored_source"])
+    logger.info("Wrote canonical CSV: %s", metadata["results_csv"])
+
+
 def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser]:
     parser = argparse.ArgumentParser(prog="ganmg")
     parser.add_argument(
@@ -427,6 +464,7 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser]:
     runs_parser = build_runs_parser(subparsers)
     build_sweep_parser(subparsers)
     build_doctor_parser(subparsers)
+    build_import_parser(subparsers)
 
     return parser, runs_parser
 
@@ -446,6 +484,8 @@ def main() -> None:
         handle_doctor(args)
     elif args.command == "runs":
         handle_runs(args, runs_parser)
+    elif args.command == "import":
+        handle_import(args)
     else:
         parser.print_help()
 

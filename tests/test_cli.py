@@ -239,3 +239,85 @@ def test_cli_analyze_fails_with_informative_validation_error(tmp_path: Path) -> 
     assert completed.returncode != 0
     assert "Input validation error:" in completed.stderr
     assert "missing required columns" in completed.stderr
+
+
+def test_cli_import_csv_into_run_dir(tmp_path: Path) -> None:
+    results_csv = tmp_path / "external_results.csv"
+    results_csv.write_text(
+        "structure_id,mechanism,energy_eV\n"
+        "ext_0001,HPC,-1.234\n"
+        "ext_0002,HPC,-1.111\n",
+        encoding="utf-8",
+    )
+
+    run_root = tmp_path / "runs"
+    run_id = "imported-run"
+
+    _run_cli(
+        "import",
+        "--run-id",
+        run_id,
+        "--run-dir",
+        str(run_root),
+        "--results",
+        str(results_csv),
+        cwd=tmp_path,
+    )
+
+    run_path = run_root / run_id
+    canonical_csv = run_path / "inputs" / "results.csv"
+    stored_source = run_path / "inputs" / "external_results.csv"
+    metadata_path = run_path / "inputs" / "import_metadata.json"
+    run_meta_path = run_path / "run.json"
+
+    assert canonical_csv.exists()
+    assert stored_source.exists()
+    assert metadata_path.exists()
+    assert run_meta_path.exists()
+
+    assert canonical_csv.read_text(encoding="utf-8") == results_csv.read_text(encoding="utf-8")
+
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    assert metadata["source_path"] == str(results_csv.resolve())
+    assert metadata["format"] == ".csv"
+
+    run_meta = json.loads(run_meta_path.read_text(encoding="utf-8"))
+    assert run_meta["command"] == "import"
+    assert run_meta["run_id"] == run_id
+
+
+def test_cli_import_fails_on_invalid_csv_schema(tmp_path: Path) -> None:
+    bad_csv = tmp_path / "external_results.csv"
+    bad_csv.write_text(
+        "structure_id,mechanism\n"
+        "ext_0001,HPC\n",
+        encoding="utf-8",
+    )
+
+    env = os.environ.copy()
+    src_path = str(REPO_ROOT / "src")
+    env["PYTHONPATH"] = src_path if not env.get("PYTHONPATH") else f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "gan_mg.cli",
+            "import",
+            "--run-id",
+            "bad-import",
+            "--run-dir",
+            str(tmp_path / "runs"),
+            "--results",
+            str(bad_csv),
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "Input validation error:" in completed.stderr
+    assert "missing required columns" in completed.stderr
