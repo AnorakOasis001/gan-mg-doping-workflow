@@ -1,6 +1,13 @@
 site_name: gan-mg-doping-workflow
 site_description: Reproducible scientific ML workflow for Mg-doped GaN thermodynamics.
 
+# IMPORTANT:
+# Force MkDocs to only read documentation pages from the /docs folder.
+# This prevents it from picking up the repository-root README.md, which can
+# conflict with docs/index.md and fail `mkdocs build --strict`.
+docs_dir: docs
+site_dir: site
+
 theme:
   name: material
 
@@ -31,6 +38,9 @@ markdown_extensions:
       generic: true
 
 extra_javascript:
+  # If you already have a local mermaid init script at docs/javascripts/mermaid.js, keep this.
   - javascripts/mermaid.js
+  # Mermaid runtime
   - https://unpkg.com/mermaid@10/dist/mermaid.min.js
+  # MathJax for equations
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
