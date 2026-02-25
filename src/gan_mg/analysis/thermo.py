@@ -4,12 +4,22 @@ import csv
 import math
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TypedDict
 
 K_B_EV_PER_K = 8.617333262e-5  # Boltzmann constant in eV/K
 
 
 @dataclass(frozen=True)
 class ThermoResult:
+    temperature_K: float
+    num_configurations: int
+    mixing_energy_min_eV: float
+    mixing_energy_avg_eV: float
+    partition_function: float
+    free_energy_mix_eV: float
+
+
+class ThermoSweepRow(TypedDict):
     temperature_K: float
     num_configurations: int
     mixing_energy_min_eV: float
@@ -100,12 +110,12 @@ def sweep_thermo_from_csv(
     csv_path: Path,
     T_values: list[float],
     energy_col: str = "energy_eV",
-) -> list[dict]:
+) -> list[ThermoSweepRow]:
     """
     Run boltzmann_thermo_from_csv for each temperature and return list of dict rows.
     """
     csv_path = Path(csv_path)
-    rows: list[dict] = []
+    rows: list[ThermoSweepRow] = []
 
     for T in T_values:
         res = boltzmann_thermo_from_csv(csv_path, T=T, energy_col=energy_col)
@@ -125,7 +135,7 @@ def sweep_thermo_from_csv(
     return rows
 
 
-def write_thermo_vs_T_csv(rows: list[dict], out_csv: Path) -> None:
+def write_thermo_vs_T_csv(rows: list[ThermoSweepRow], out_csv: Path) -> None:
     out_csv = Path(out_csv)
     out_csv.parent.mkdir(parents=True, exist_ok=True)
 
@@ -144,16 +154,11 @@ def write_thermo_vs_T_csv(rows: list[dict], out_csv: Path) -> None:
             w.writerow(r)
 
 
-def plot_thermo_vs_T(rows: list[dict], out_png: Path) -> None:
+def plot_thermo_vs_T(rows: list[ThermoSweepRow], out_png: Path) -> None:
     import matplotlib
 
     matplotlib.use("Agg")  # headless backend (CI-safe)
     import matplotlib.pyplot as plt
-
-    required = {"temperature_K", "free_energy_mix_eV", "mixing_energy_avg_eV"}
-    missing = [required - set(r.keys()) for r in rows[:1]]
-    if missing and missing[0]:
-        raise KeyError(f"Row is missing keys {missing[0]}. Row keys are: {list(rows[0].keys())}")
 
     temperature_K = [r["temperature_K"] for r in rows]
     free_energy_mix_eV = [r["free_energy_mix_eV"] for r in rows]
