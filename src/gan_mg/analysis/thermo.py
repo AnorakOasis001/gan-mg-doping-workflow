@@ -4,7 +4,7 @@ import csv
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -34,31 +34,6 @@ class ThermoSweepRow(TypedDict):
 REQUIRED_RESULTS_COLUMNS = ("structure_id", "mechanism", "energy_eV")
 
 
-def _rows_from_dataframe_like(df: Any) -> tuple[list[str], list[dict[str, Any]]]:
-    if isinstance(df, list):
-        if not df:
-            return [], []
-        columns = [str(c) for c in df[0].keys()]
-        return columns, [dict(r) for r in df]
-
-    if hasattr(df, "to_dict") and hasattr(df, "columns"):
-        columns = [str(c) for c in df.columns]
-        rows = df.to_dict(orient="records")
-        return columns, rows
-
-    raise ValueError("Unsupported dataframe input for validation.")
-
-
-def _is_nan_value(value: Any) -> bool:
-    if value is None:
-        return True
-    if isinstance(value, float):
-        return math.isnan(value)
-    if isinstance(value, str) and value.strip().lower() in {"", "nan", "none", "null"}:
-        return True
-    return False
-
-
 def validate_results_dataframe(df: "pd.DataFrame") -> None:
     """
     Validate the expected thermodynamic input table.
@@ -69,35 +44,29 @@ def validate_results_dataframe(df: "pd.DataFrame") -> None:
     - no NaN values in required columns
     - energy_eV is numeric
     """
-    columns, rows = _rows_from_dataframe_like(df)
+    import pandas as pd
 
-    if not rows:
+    if df.empty:
         raise ValueError("results.csv must contain at least 1 row.")
 
-    missing_columns = [c for c in REQUIRED_RESULTS_COLUMNS if c not in columns]
+    missing_columns = [column for column in REQUIRED_RESULTS_COLUMNS if column not in df.columns]
     if missing_columns:
         raise ValueError(
             "results.csv is missing required columns: "
             f"{', '.join(missing_columns)}"
         )
 
-    nan_columns: list[str] = []
-    for column in REQUIRED_RESULTS_COLUMNS:
-        if any(_is_nan_value(r.get(column)) for r in rows):
-            nan_columns.append(column)
+    required_frame = df.loc[:, REQUIRED_RESULTS_COLUMNS]
+    nan_columns = required_frame.columns[required_frame.isna().any()].tolist()
     if nan_columns:
         raise ValueError(
             "results.csv contains NaN values in required columns: "
             f"{', '.join(nan_columns)}"
         )
 
-    for row in rows:
-        try:
-            energy = float(row["energy_eV"])
-        except (TypeError, ValueError) as exc:
-            raise ValueError("Column 'energy_eV' must contain numeric values.") from exc
-        if math.isnan(energy):
-            raise ValueError("Column 'energy_eV' must contain numeric values.")
+    energy_as_numeric = pd.to_numeric(required_frame["energy_eV"], errors="coerce")
+    if energy_as_numeric.isna().any():
+        raise ValueError("Column 'energy_eV' must contain numeric values.")
 
 
 def read_energies_csv(csv_path: Path, energy_col: str = "energy_eV") -> list[float]:
@@ -105,35 +74,28 @@ def read_energies_csv(csv_path: Path, energy_col: str = "energy_eV") -> list[flo
     Read energies (eV) from a CSV file.
     Expects a column named `energy_col` (default: energy_eV).
     """
+    import pandas as pd
+
     csv_path = Path(csv_path)
     if not csv_path.exists():
         raise FileNotFoundError(f"CSV not found: {csv_path}")
 
     with csv_path.open("r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        rows = [dict(r) for r in reader]
+        rows = [dict(row) for row in reader]
         fieldnames = [] if reader.fieldnames is None else list(reader.fieldnames)
 
-    validate_results_dataframe(rows)
+    df = pd.DataFrame(rows, columns=fieldnames)
+    validate_results_dataframe(df)
 
-    if energy_col not in fieldnames:
+    if energy_col not in df.columns:
         raise ValueError(f"results.csv must contain column '{energy_col}'.")
 
-    energies: list[float] = []
-    for row in rows:
-        try:
-            energy = float(row[energy_col])
-        except (TypeError, ValueError) as exc:
-            raise ValueError(
-                f"Column '{energy_col}' must contain numeric values and no NaN entries."
-            ) from exc
-        if math.isnan(energy):
-            raise ValueError(
-                f"Column '{energy_col}' must contain numeric values and no NaN entries."
-            )
-        energies.append(energy)
+    energy_series = pd.to_numeric(df[energy_col], errors="coerce")
+    if energy_series.isna().any():
+        raise ValueError(f"Column '{energy_col}' must contain numeric values and no NaN entries.")
 
-    return energies
+    return [float(value) for value in energy_series.astype(float).tolist()]
 
 
 def boltzmann_thermo_from_energies(energies: list[float], T: float) -> ThermoResult:

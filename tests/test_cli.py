@@ -3,6 +3,8 @@ import json
 import os
 import subprocess
 import sys
+
+import pytest
 from pathlib import Path
 
 
@@ -24,6 +26,7 @@ def _run_cli(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
 
 
 def test_cli_generate_analyze_sweep_end_to_end(tmp_path: Path) -> None:
+    pytest.importorskip("pandas")
     run_dir = tmp_path / "runs"
     run_id = "pytest-run"
 
@@ -94,6 +97,7 @@ def test_cli_verbose_and_quiet_flags_conflict(tmp_path: Path) -> None:
 
 
 def test_cli_analyze_fails_with_informative_validation_error(tmp_path: Path) -> None:
+    pytest.importorskip("pandas")
     bad_csv = tmp_path / "results.csv"
     bad_csv.write_text("structure_id,mechanism\ndemo_0001,MgGa+VN\n", encoding="utf-8")
 

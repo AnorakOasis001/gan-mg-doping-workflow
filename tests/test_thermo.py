@@ -52,27 +52,30 @@ def test_free_energy_matches_analytic_formula() -> None:
 
 
 def test_validate_results_dataframe_missing_column() -> None:
-    df = [{"structure_id": "demo_0001", "energy_eV": -0.123}]
+    pd = pytest.importorskip("pandas")
+    df = pd.DataFrame({"structure_id": ["demo_0001"], "energy_eV": [-0.123]})
 
     with pytest.raises(ValueError, match="missing required columns: mechanism"):
         validate_results_dataframe(df)
 
 
 def test_validate_results_dataframe_empty_dataframe() -> None:
-    df: list[dict[str, object]] = []
+    pd = pytest.importorskip("pandas")
+    df = pd.DataFrame(columns=["structure_id", "mechanism", "energy_eV"])
 
     with pytest.raises(ValueError, match="at least 1 row"):
         validate_results_dataframe(df)
 
 
 def test_validate_results_dataframe_nan_values() -> None:
-    df = [
+    pd = pytest.importorskip("pandas")
+    df = pd.DataFrame(
         {
-            "structure_id": "demo_0001",
-            "mechanism": "MgGa+VN",
-            "energy_eV": float("nan"),
+            "structure_id": ["demo_0001"],
+            "mechanism": ["MgGa+VN"],
+            "energy_eV": [float("nan")],
         }
-    ]
+    )
 
     with pytest.raises(ValueError, match="NaN values"):
         validate_results_dataframe(df)
