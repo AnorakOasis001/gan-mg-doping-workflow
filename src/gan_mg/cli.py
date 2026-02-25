@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import json
 import logging
 import platform
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 from gan_mg import __version__
 from gan_mg.analysis.thermo import (
@@ -45,6 +47,15 @@ def log_profile(stage: str, start_time: float, num_configurations: int) -> None:
         elapsed_s,
         num_configurations,
     )
+
+
+def write_metrics_json(metrics_path: Path, metrics: dict[str, Any]) -> None:
+    metrics_path.parent.mkdir(parents=True, exist_ok=True)
+    metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+
+
+def _runtime_seconds(start_time: float) -> float:
+    return time.perf_counter() - start_time
 
 
 
@@ -108,9 +119,12 @@ def build_analyze_parser(subparsers: argparse._SubParsersAction[argparse.Argumen
 
 def build_runs_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> argparse.ArgumentParser:
     parser = subparsers.add_parser("runs", help="Inspect available runs.")
+    parser.add_argument("--run-dir", default="runs", help="Root directory to store runs.")
     runs_sub = parser.add_subparsers(dest="runs_command")
     runs_sub.add_parser("list", help="List all runs with metadata.")
     runs_sub.add_parser("latest", help="Print latest run id.")
+    show_parser = runs_sub.add_parser("show", help="Print run metadata and latest metrics.json.")
+    show_parser.add_argument("--run-id", required=True, help="Run id to inspect.")
     return parser
 
 
@@ -186,9 +200,45 @@ def handle_analyze(args: argparse.Namespace) -> None:
     except ValueError as e:
         raise SystemExit(f"Input validation error: {e}") from e
 
+    reproducibility_hash = compute_reproducibility_hash(
+        input_csv=csv_path,
+        temperature_grid=[args.T],
+        code_version=__version__,
+    )
+
+    timings: dict[str, float] = {}
+    if args.profile:
+        timings["runtime_s"] = _runtime_seconds(stage_start)
+
+    metrics: dict[str, Any] = {
+        "command": "analyze",
+        "temperature_K": result.temperature_K,
+        "num_configurations": result.num_configurations,
+        "mixing_energy_min_eV": result.mixing_energy_min_eV,
+        "mixing_energy_avg_eV": result.mixing_energy_avg_eV,
+        "partition_function": result.partition_function,
+        "free_energy_mix_eV": result.free_energy_mix_eV,
+        "reproducibility_hash": reproducibility_hash,
+    }
+    if timings:
+        metrics["timings"] = timings
+
+    if args.run_id is not None:
+        metrics_path = run_dir / "outputs" / "metrics.json"
+        write_metrics_json(metrics_path, metrics)
+
+        meta = load_run_meta(run_dir)
+        meta["reproducibility_hash"] = reproducibility_hash
+        write_run_meta(run_dir / "run.json", meta)
+    else:
+        metrics_path = Path("results") / "tables" / "metrics.json"
+        write_metrics_json(metrics_path, metrics)
+
     write_thermo_txt(result, out_txt)
+    logger.info("Wrote: %s", metrics_path)
     logger.info("%s", out_txt.read_text(encoding="utf-8"))
     if args.profile:
+        # Keep profile logging format stable for existing consumers/tests.
         log_profile("analyze", stage_start, num_configurations=result.num_configurations)
 
 
@@ -229,6 +279,31 @@ def handle_sweep(args: argparse.Namespace) -> None:
     write_thermo_vs_T_csv(rows, out_csv)
     logger.info("Wrote: %s", out_csv)
 
+    num_configurations = 0 if not rows else int(rows[0]["num_configurations"])
+    timings: dict[str, float] = {}
+    if args.profile:
+        timings["runtime_s"] = _runtime_seconds(stage_start)
+
+    metrics: dict[str, Any] = {
+        "command": "sweep",
+        "temperature_grid_K": [row["temperature_K"] for row in rows],
+        "num_configurations": num_configurations,
+        "mixing_energy_min_eV": [row["mixing_energy_min_eV"] for row in rows],
+        "mixing_energy_avg_eV": [row["mixing_energy_avg_eV"] for row in rows],
+        "partition_function": [row["partition_function"] for row in rows],
+        "free_energy_mix_eV": [row["free_energy_mix_eV"] for row in rows],
+        "reproducibility_hash": reproducibility_hash,
+    }
+    if timings:
+        metrics["timings"] = timings
+
+    if args.csv is None:
+        metrics_path = run_dir / "outputs" / "metrics.json"
+    else:
+        metrics_path = Path("results") / "tables" / "metrics.json"
+    write_metrics_json(metrics_path, metrics)
+    logger.info("Wrote: %s", metrics_path)
+
     if args.csv is None:
         meta = load_run_meta(run_dir)
         meta["reproducibility_hash"] = reproducibility_hash
@@ -247,7 +322,6 @@ def handle_sweep(args: argparse.Namespace) -> None:
             ) from e
 
     if args.profile:
-        num_configurations = 0 if not rows else int(rows[0]["num_configurations"])
         log_profile("sweep", stage_start, num_configurations=num_configurations)
 
 
@@ -303,6 +377,27 @@ def handle_runs(args: argparse.Namespace, runs_parser: argparse.ArgumentParser) 
             logger.info("%s", latest)
         except FileNotFoundError:
             logger.info("No runs found.")
+
+    elif args.runs_command == "show":
+        run_dir = run_root / args.run_id
+        if not run_dir.exists():
+            raise SystemExit(f"Run not found: {run_dir}")
+
+        meta = load_run_meta(run_dir)
+        metrics_path = run_dir / "outputs" / "metrics.json"
+        logger.info("run_id            : %s", args.run_id)
+        logger.info("run_dir           : %s", run_dir)
+
+        for key in ("command", "n", "seed", "model", "inputs_csv", "reproducibility_hash"):
+            if key in meta:
+                logger.info("%s%s", f"{key:<18}: ", meta[key])
+
+        if metrics_path.exists():
+            latest_metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+            logger.info("latest_metrics    :")
+            logger.info("%s", json.dumps(latest_metrics, indent=2))
+        else:
+            logger.info("latest_metrics    : <missing> %s", metrics_path)
 
     else:
         runs_parser.print_help()
