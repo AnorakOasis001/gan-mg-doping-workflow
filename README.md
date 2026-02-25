@@ -22,6 +22,10 @@ This repository demonstrates the evolution of a research codebase into a reprodu
 
 The project is intentionally structured to reflect research software engineering best practices.
 
+### GitHub Pages quick note
+
+If you publish docs with GitHub Actions, enable Pages first in **Settings → Pages** and set **Source** to **GitHub Actions**. Keep your docs workflow permissions set to `pages: write` and `id-token: write` so deployment can complete.
+
 ---
 
 ## Thermodynamics
