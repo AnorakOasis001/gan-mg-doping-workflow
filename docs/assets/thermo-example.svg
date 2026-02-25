@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="420" viewBox="0 0 720 420" role="img" aria-label="Example thermodynamic plot">
+  <rect width="720" height="420" fill="white"/>
+  <text x="360" y="34" font-family="Arial, sans-serif" font-size="20" text-anchor="middle" fill="#222">Example thermo_vs_T plot</text>
+  <line x1="80" y1="360" x2="660" y2="360" stroke="#444" stroke-width="2"/>
+  <line x1="80" y1="360" x2="80" y2="70" stroke="#444" stroke-width="2"/>
+  <text x="370" y="398" font-family="Arial, sans-serif" font-size="14" text-anchor="middle" fill="#333">Temperature (K)</text>
+  <text x="25" y="220" font-family="Arial, sans-serif" font-size="14" text-anchor="middle" fill="#333" transform="rotate(-90 25 220)">Energy (eV)</text>
+  <polyline fill="none" stroke="#1f77b4" stroke-width="3" points="100,290 170,280 240,265 310,248 380,230 450,210 520,188 590,165"/>
+  <polyline fill="none" stroke="#d62728" stroke-width="3" points="100,310 170,300 240,286 310,272 380,255 450,238 520,220 590,202"/>
+  <rect x="450" y="80" width="190" height="58" fill="#fff" stroke="#ddd"/>
+  <line x1="464" y1="98" x2="500" y2="98" stroke="#1f77b4" stroke-width="3"/>
+  <text x="508" y="102" font-family="Arial, sans-serif" font-size="12" fill="#222">free_energy_mix_eV</text>
+  <line x1="464" y1="120" x2="500" y2="120" stroke="#d62728" stroke-width="3"/>
+  <text x="508" y="124" font-family="Arial, sans-serif" font-size="12" fill="#222">mixing_energy_avg_eV</text>
+</svg>

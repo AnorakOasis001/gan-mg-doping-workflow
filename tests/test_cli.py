@@ -321,3 +321,18 @@ def test_cli_import_fails_on_invalid_csv_schema(tmp_path: Path) -> None:
     assert completed.returncode != 0
     assert "Input validation error:" in completed.stderr
     assert "missing required columns" in completed.stderr
+
+
+def test_cli_plot_thermo_creates_figure_when_plot_extra_available(tmp_path: Path) -> None:
+    pytest.importorskip("pandas")
+    pytest.importorskip("matplotlib")
+
+    run_dir = tmp_path / "runs"
+    run_id = "plot-run"
+
+    _run_cli("generate", "--run-dir", str(run_dir), "--run-id", run_id, "--n", "6", "--seed", "11", cwd=tmp_path)
+    _run_cli("plot", "--run-dir", str(run_dir), "--run-id", run_id, "--kind", "thermo", cwd=tmp_path)
+
+    figure_path = run_dir / run_id / "figures" / "thermo_vs_T.png"
+    assert figure_path.exists()
+    assert figure_path.stat().st_size > 0

@@ -51,3 +51,14 @@ Writes:
 
 - `outputs/bench.json`
 
+
+
+## Regenerate run figures
+
+```bash
+ganmg plot --run-id demo --kind thermo
+```
+
+Writes:
+
+- `runs/demo/figures/thermo_vs_T.png`
