@@ -125,6 +125,30 @@ ganmg sweep --run-id toy-backend --nT 7
 
 ---
 
+
+## Importing external results (HPC)
+
+Use the import command to bring externally computed energies (for example from HPC relaxations) into a run directory:
+
+```bash
+ganmg import --run-id <id> --run-dir <dir> --results <path>
+```
+
+Supported input formats:
+
+* `results.csv`: must include `structure_id`, `mechanism`, and `energy_eV` columns.
+* `extxyz`/`xyz`: parsed in best-effort mode from per-structure comment-line fields such as `energy=...` or `energy_eV=...`.
+
+What gets written:
+
+* Canonical analysis input at `runs/<id>/inputs/results.csv`
+* A stored source copy at `runs/<id>/inputs/external_results.<ext>`
+* Import metadata at `runs/<id>/inputs/import_metadata.json` with source path and UTC timestamp
+
+If schema validation fails, the CLI exits with a clear `Input validation error:` message describing the issue.
+
+---
+
 ## CLI Commands
 
 ### Generate
