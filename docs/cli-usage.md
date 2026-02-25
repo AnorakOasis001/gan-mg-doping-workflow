@@ -40,3 +40,14 @@ ganmg generate --run-id smoke --seed 123
 ganmg analyze --run-id smoke --temperature 1000
 ganmg sweep --run-id smoke --tmin 300 --tmax 1200 --tstep 100
 ```
+
+## Benchmark thermodynamics sweep
+
+```bash
+ganmg bench thermo --n 1000 --nT 50
+```
+
+Writes:
+
+- `outputs/bench.json`
+

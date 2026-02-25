@@ -4,7 +4,9 @@ import argparse
 import importlib.util
 import json
 import logging
+import math
 import platform
+import random
 import sys
 import time
 from pathlib import Path
@@ -12,6 +14,7 @@ from typing import Any
 
 from gan_mg import __version__
 from gan_mg.analysis.thermo import (
+    boltzmann_thermo_from_energies,
     boltzmann_thermo_from_csv,
     plot_thermo_vs_T,
     sweep_thermo_from_csv,
@@ -154,6 +157,31 @@ def build_doctor_parser(subparsers: argparse._SubParsersAction[argparse.Argument
         "doctor", help="Print environment diagnostics for reproducibility."
     )
     parser.add_argument("--run-dir", default="runs", help="Root directory to store runs.")
+    return parser
+
+
+def build_bench_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser(
+        "bench", help="Run lightweight performance benchmarks."
+    )
+    bench_sub = parser.add_subparsers(dest="bench_command")
+
+    thermo = bench_sub.add_parser(
+        "thermo",
+        help="Benchmark thermodynamic sweep on synthetic energies.",
+    )
+    thermo.add_argument("--n", type=int, default=1000, help="Number of synthetic energies.")
+    thermo.add_argument("--nT", type=int, default=50, help="Number of temperatures in the sweep.")
+    thermo.add_argument("--T-min", type=float, default=300.0, dest="T_min")
+    thermo.add_argument("--T-max", type=float, default=1500.0, dest="T_max")
+    thermo.add_argument("--seed", type=int, default=7, help="Random seed for synthetic energies.")
+    thermo.add_argument(
+        "--out",
+        type=Path,
+        default=Path("outputs") / "bench.json",
+        help="Path to write benchmark JSON output.",
+    )
+
     return parser
 
 
@@ -440,7 +468,71 @@ def handle_import(args: argparse.Namespace) -> None:
     logger.info("Wrote canonical CSV: %s", metadata["results_csv"])
 
 
-def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser]:
+def _synthetic_energies(n: int, seed: int) -> list[float]:
+    rng = random.Random(seed)
+    return [
+        -1.8
+        + 0.0007 * i
+        + 0.025 * math.sin(i / 17.0)
+        + 0.01 * rng.uniform(-1.0, 1.0)
+        for i in range(n)
+    ]
+
+
+def handle_bench(args: argparse.Namespace, bench_parser: argparse.ArgumentParser) -> None:
+    if args.bench_command != "thermo":
+        bench_parser.print_help()
+        return
+
+    if args.n <= 0:
+        raise SystemExit("--n must be > 0")
+    if args.nT < 2:
+        raise SystemExit("--nT must be >= 2")
+
+    energies = _synthetic_energies(n=args.n, seed=args.seed)
+    temperatures = [
+        args.T_min + i * (args.T_max - args.T_min) / (args.nT - 1)
+        for i in range(args.nT)
+    ]
+
+    sweep_start = time.perf_counter()
+    results = [boltzmann_thermo_from_energies(energies, T=t) for t in temperatures]
+    sweep_runtime_s = _runtime_seconds(sweep_start)
+
+    payload = {
+        "command": "bench thermo",
+        "params": {
+            "n": args.n,
+            "nT": args.nT,
+            "T_min": args.T_min,
+            "T_max": args.T_max,
+            "seed": args.seed,
+        },
+        "timings": {
+            "sweep_runtime_s": sweep_runtime_s,
+            "time_per_temperature_ms": (sweep_runtime_s / args.nT) * 1000.0,
+        },
+        "result_snapshot": {
+            "num_configurations": results[0].num_configurations,
+            "first_temperature_K": results[0].temperature_K,
+            "last_temperature_K": results[-1].temperature_K,
+            "first_free_energy_mix_eV": results[0].free_energy_mix_eV,
+            "last_free_energy_mix_eV": results[-1].free_energy_mix_eV,
+        },
+        "environment": {
+            "python": sys.version.split()[0],
+            "platform": platform.platform(),
+            "processor": platform.processor(),
+            "gan_mg_version": __version__,
+        },
+    }
+
+    write_metrics_json(args.out, payload)
+    logger.info("Wrote: %s", args.out)
+    logger.info("Benchmark runtime: %.6fs", sweep_runtime_s)
+
+
+def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser, argparse.ArgumentParser]:
     parser = argparse.ArgumentParser(prog="ganmg")
     parser.add_argument(
         "--verbose",
@@ -465,12 +557,13 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser]:
     build_sweep_parser(subparsers)
     build_doctor_parser(subparsers)
     build_import_parser(subparsers)
+    bench_parser = build_bench_parser(subparsers)
 
-    return parser, runs_parser
+    return parser, runs_parser, bench_parser
 
 
 def main() -> None:
-    parser, runs_parser = build_parser()
+    parser, runs_parser, bench_parser = build_parser()
     args = parser.parse_args()
     configure_logging(verbose=args.verbose, quiet=args.quiet)
 
@@ -486,6 +579,8 @@ def main() -> None:
         handle_runs(args, runs_parser)
     elif args.command == "import":
         handle_import(args)
+    elif args.command == "bench":
+        handle_bench(args, bench_parser)
     else:
         parser.print_help()
 
