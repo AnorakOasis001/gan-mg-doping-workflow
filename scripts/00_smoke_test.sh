@@ -5,6 +5,16 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 # -------------------------
+# Parse script flags
+#   bash scripts/00_smoke_test.sh        # core (no plot)
+#   bash scripts/00_smoke_test.sh --plot # plot mode
+# -------------------------
+PLOT_FLAG=""
+if [[ "${1:-}" == "--plot" ]]; then
+  PLOT_FLAG="--plot"
+fi
+
+# -------------------------
 # Choose Python interpreter
 # -------------------------
 if [[ -n "${PYTHON:-}" ]]; then
@@ -31,18 +41,15 @@ echo "[smoke] editable install (dev only)"
 "$PYTHON" -m pip install -U pip
 "$PYTHON" -m pip install -e ".[dev]" --no-build-isolation
 
-# --------------------------------------------------
-# Detect whether matplotlib (plot extra) is present
-# --------------------------------------------------
+# Detect matplotlib availability (exit code based)
 if "$PYTHON" -c "import matplotlib" >/dev/null 2>&1; then
   HAS_PLOT="yes"
 else
   HAS_PLOT="no"
 fi
-
 echo "[smoke] matplotlib available: $HAS_PLOT"
 
-# Prefer module invocation (robust)
+# Prefer module invocation
 GANMG=( "$PYTHON" -m gan_mg.cli )
 
 RUN_ID="smoke"
@@ -52,9 +59,7 @@ TMIN="300"
 TMAX="1200"
 NT="10"
 
-# -------------------------
-# Clean previous run
-# -------------------------
+# Clean previous smoke run (idempotent)
 if [ -d "runs/$RUN_ID" ]; then
   echo "[smoke] removing existing runs/$RUN_ID"
   rm -rf "runs/$RUN_ID"
@@ -74,21 +79,20 @@ echo "[smoke] sweep"
   --run-id "$RUN_ID" \
   --T-min "$TMIN" \
   --T-max "$TMAX" \
-  --nT "$NT"
+  --nT "$NT" \
+  $PLOT_FLAG
 
 echo "[smoke] assert CSV outputs"
 test -f "runs/$RUN_ID/inputs/results.csv"
 test -f "runs/$RUN_ID/outputs/thermo_vs_T.csv"
 
-# --------------------------------------------------
-# Only require PNG if matplotlib is installed
-# --------------------------------------------------
-if [ "$HAS_PLOT" = "yes" ]; then
+# Only require PNG when plot mode is requested
+if [[ "$PLOT_FLAG" == "--plot" ]]; then
   echo "[smoke] checking plot output"
   test -f "runs/$RUN_ID/outputs/thermo_vs_T.png"
   echo "[smoke] plot file exists"
 else
-  echo "[smoke] matplotlib not installed — skipping PNG assertion"
+  echo "[smoke] plot mode not requested — skipping PNG assertion"
 fi
 
 echo "[smoke] OK"
