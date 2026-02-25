@@ -514,13 +514,13 @@ def handle_import(args: argparse.Namespace) -> None:
     meta = load_run_meta(run_dir)
     meta["command"] = "import"
     meta["run_id"] = args.run_id
-    meta["inputs_csv"] = str(run_dir / "inputs" / "results.csv")
+    meta["inputs_csv"] = metadata["results_csv"]
     write_run_meta(run_dir / "run.json", meta)
 
     logger.info("Run import complete: %s", run_dir)
     logger.info("Imported source: %s", metadata["source_path"])
-    logger.info("Stored source: %s", metadata["stored_source"])
     logger.info("Wrote canonical CSV: %s", metadata["results_csv"])
+    logger.info("Wrote import metadata: %s", metadata["metadata_path"])
 
 
 def _synthetic_energies(n: int, seed: int) -> list[float]:

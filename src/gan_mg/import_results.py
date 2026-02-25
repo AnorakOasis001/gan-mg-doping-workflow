@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import re
 import shutil
@@ -9,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from gan_mg.analysis.thermo import REQUIRED_RESULTS_COLUMNS
+from gan_mg.analysis.thermo import read_energies_csv
 
 
 def _timestamp_utc_iso() -> str:
@@ -47,6 +49,14 @@ def _validate_csv_results_schema(csv_path: Path) -> tuple[list[dict[str, str]], 
             ) from exc
 
     return rows, fieldnames
+
+
+def _sha256_hex(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 _ENERGY_PATTERNS = (
@@ -136,29 +146,38 @@ def import_results_to_run(run_dir: Path, source_path: Path) -> dict[str, Any]:
 
     ext = source_path.suffix.lower()
     if ext == ".csv":
-        _validate_csv_results_schema(source_path)
-        results_csv = inputs_dir / "results.csv"
+        # Reuse canonical CSV validation logic used by thermo analysis.
+        read_energies_csv(source_path, energy_col="energy_eV")
+
+        canonical_csv = inputs_dir / "results.csv"
+        if canonical_csv.exists():
+            results_csv = inputs_dir / "imported_results.csv"
+        else:
+            results_csv = canonical_csv
         shutil.copy2(source_path, results_csv)
     elif ext in {".extxyz", ".xyz"}:
         rows = extxyz_to_results_rows(source_path)
-        results_csv = inputs_dir / "results.csv"
+        canonical_csv = inputs_dir / "results.csv"
+        if canonical_csv.exists():
+            results_csv = inputs_dir / "imported_results.csv"
+        else:
+            results_csv = canonical_csv
         write_results_csv(rows, results_csv)
     else:
         raise ValueError(
             "Unsupported import format. Supported files: .csv, .extxyz, .xyz"
         )
 
-    stored_source = inputs_dir / f"external_results{source_path.suffix.lower()}"
-    shutil.copy2(source_path, stored_source)
-
     metadata = {
-        "imported_at_utc": _timestamp_utc_iso(),
         "source_path": str(source_path),
-        "source_file": source_path.name,
-        "stored_source": str(stored_source),
+        "imported_at": _timestamp_utc_iso(),
+        "sha256": _sha256_hex(source_path),
         "results_csv": str(results_csv),
         "format": ext,
     }
-    metadata_path = inputs_dir / "import_metadata.json"
+    metadata_path = inputs_dir / "import.json"
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
-    return metadata
+    return {
+        **metadata,
+        "metadata_path": str(metadata_path),
+    }
