@@ -50,6 +50,9 @@ def test_cli_generate_analyze_sweep_end_to_end(tmp_path: Path) -> None:
 
     _run_cli("sweep", "--run-dir", str(run_dir), "--run-id", run_id, "--nT", "7", cwd=tmp_path)
 
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    assert "reproducibility_hash" in meta
+
     sweep_csv = run_path / "outputs" / "thermo_vs_T.csv"
     assert sweep_csv.exists()
 
@@ -65,6 +68,27 @@ def test_cli_generate_analyze_sweep_end_to_end(tmp_path: Path) -> None:
         "free_energy_mix_eV",
     }
     assert set(rows[0].keys()) == expected_headers
+
+
+def test_cli_sweep_reproducibility_hash_tracks_inputs_and_temperature_grid(tmp_path: Path) -> None:
+    pytest.importorskip("pandas")
+    run_dir = tmp_path / "runs"
+    run_id_1 = "repro-1"
+    run_id_2 = "repro-2"
+
+    _run_cli("generate", "--run-dir", str(run_dir), "--run-id", run_id_1, "--n", "6", "--seed", "11", cwd=tmp_path)
+    _run_cli("generate", "--run-dir", str(run_dir), "--run-id", run_id_2, "--n", "6", "--seed", "11", cwd=tmp_path)
+
+    _run_cli("sweep", "--run-dir", str(run_dir), "--run-id", run_id_1, "--nT", "7", cwd=tmp_path)
+    _run_cli("sweep", "--run-dir", str(run_dir), "--run-id", run_id_2, "--nT", "7", cwd=tmp_path)
+
+    meta_1 = json.loads((run_dir / run_id_1 / "run.json").read_text(encoding="utf-8"))
+    meta_2 = json.loads((run_dir / run_id_2 / "run.json").read_text(encoding="utf-8"))
+    assert meta_1["reproducibility_hash"] == meta_2["reproducibility_hash"]
+
+    _run_cli("sweep", "--run-dir", str(run_dir), "--run-id", run_id_2, "--nT", "8", cwd=tmp_path)
+    meta_2_updated = json.loads((run_dir / run_id_2 / "run.json").read_text(encoding="utf-8"))
+    assert meta_1["reproducibility_hash"] != meta_2_updated["reproducibility_hash"]
 
 
 def test_cli_doctor_reports_logging_level(tmp_path: Path) -> None:

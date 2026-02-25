@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 import logging
+from hashlib import sha256
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import Any, Sequence, TypedDict, cast
 
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,7 @@ class RunMeta(TypedDict, total=False):
     n: int
     seed: int
     inputs_csv: str
+    reproducibility_hash: str
 
 
 def make_run_id(seed: int | None = None, n: int | None = None) -> str:
@@ -89,3 +91,16 @@ def load_run_meta(run_dir: Path) -> RunMeta:
     logger.debug("Loading run metadata from %s", meta_path)
     raw_meta: dict[str, Any] = json.loads(meta_path.read_text(encoding="utf-8"))
     return cast(RunMeta, raw_meta)
+
+
+def compute_reproducibility_hash(
+    input_csv: Path,
+    temperature_grid: Sequence[float],
+    code_version: str,
+) -> str:
+    """Build a SHA256 fingerprint from input data, temperature grid, and code version."""
+    hasher = sha256()
+    hasher.update(input_csv.read_bytes())
+    hasher.update(json.dumps(list(temperature_grid), sort_keys=True).encode("utf-8"))
+    hasher.update(code_version.encode("utf-8"))
+    return hasher.hexdigest()
