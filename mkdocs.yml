@@ -13,6 +13,7 @@ nav:
   - Thermodynamics math: thermodynamics-math.md
   - Reproducibility philosophy: reproducibility-philosophy.md
   - Performance & scaling: performance-scaling.md
+  - HPC mapping (Mg-doped GaN + MACE): hpc_mapping.md
 
 markdown_extensions:
   - admonition
