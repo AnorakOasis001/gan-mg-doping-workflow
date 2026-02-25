@@ -34,14 +34,7 @@ echo "[smoke] editable install (dev only)"
 # --------------------------------------------------
 # Detect whether matplotlib (plot extra) is present
 # --------------------------------------------------
-if "$PYTHON" - <<EOF
-try:
-    import matplotlib
-    print("yes")
-except ImportError:
-    print("no")
-EOF
-then
+if "$PYTHON" -c "import matplotlib" >/dev/null 2>&1; then
   HAS_PLOT="yes"
 else
   HAS_PLOT="no"
