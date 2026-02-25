@@ -81,6 +81,12 @@ def build_generate_parser(subparsers: argparse._SubParsersAction[argparse.Argume
     add_run_args(parser)
     parser.add_argument("--n", type=int, default=10, help="Number of demo structures.")
     parser.add_argument("--seed", type=int, default=7, help="Random seed.")
+    parser.add_argument(
+        "--model",
+        choices=["demo", "toy"],
+        default="demo",
+        help="Energy model backend used during generation.",
+    )
     return parser
 
 
@@ -142,7 +148,7 @@ def handle_generate(args: argparse.Namespace) -> None:
     paths = init_run(Path(args.run_dir), run_id)
 
     out_csv = paths.inputs_dir / "results.csv"
-    generate_demo_csv(n=args.n, seed=args.seed, out_csv=out_csv)
+    generate_demo_csv(n=args.n, seed=args.seed, out_csv=out_csv, model_name=args.model)
 
     write_run_meta(
         paths.meta_path,
@@ -151,6 +157,7 @@ def handle_generate(args: argparse.Namespace) -> None:
             "run_id": run_id,
             "n": args.n,
             "seed": args.seed,
+            "model": args.model,
             "inputs_csv": str(out_csv),
         },
     )

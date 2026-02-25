@@ -101,6 +101,29 @@ If matplotlib is not installed, omit `--plot`.
 
 ---
 
+## Models
+
+Generation now supports pluggable energy backends via `--model`:
+
+* `demo` (default): seeded pseudo-random demo energies (current baseline behavior).
+* `toy`: deterministic toy pair-potential penalty model for backend-swappable integration tests.
+
+Example commands:
+
+```bash
+# Default demo backend
+ganmg generate --run-id demo-backend --seed 11 --model demo
+
+# Deterministic toy backend
+ganmg generate --run-id toy-backend --seed 11 --model toy
+
+# Thermodynamics pipeline works with either model
+ganmg analyze --run-id toy-backend --T 1000
+ganmg sweep --run-id toy-backend --nT 7
+```
+
+---
+
 ## CLI Commands
 
 ### Generate

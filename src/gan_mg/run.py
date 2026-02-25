@@ -25,6 +25,7 @@ class RunMeta(TypedDict, total=False):
     run_id: str
     n: int
     seed: int
+    model: str
     inputs_csv: str
     reproducibility_hash: str
 
