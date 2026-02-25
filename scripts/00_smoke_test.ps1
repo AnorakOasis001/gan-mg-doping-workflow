@@ -14,9 +14,15 @@ python -m pip install -U pip
 python -m pip install -e ".[dev]" --no-build-isolation
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-# Detect matplotlib availability (informational only)
+# -----------------------------
+# Detect matplotlib availability (non-fatal)
+# -----------------------------
 $HasMatplotlib = $false
-python -c "import matplotlib" 2>$null
+$oldEA = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+python -c "import matplotlib" *> $null
+$ErrorActionPreference = $oldEA
+
 if ($LASTEXITCODE -eq 0) { $HasMatplotlib = $true }
 Write-Host "[smoke] matplotlib available: $HasMatplotlib"
 
