@@ -1,5 +1,6 @@
 import argparse
 import importlib.util
+import logging
 import platform
 import sys
 from pathlib import Path
@@ -20,6 +21,30 @@ from gan_mg.run import (
     make_run_id,
     write_run_meta,
 )
+
+
+LOG_FORMAT = "%(message)s"
+LOG_LEVELS = {
+    "quiet": logging.WARNING,
+    "default": logging.INFO,
+    "verbose": logging.DEBUG,
+}
+logger = logging.getLogger(__name__)
+
+
+def configure_logging(verbose: bool, quiet: bool) -> int:
+    if verbose and quiet:
+        raise SystemExit("--verbose and --quiet cannot be used together")
+
+    if verbose:
+        level = LOG_LEVELS["verbose"]
+    elif quiet:
+        level = LOG_LEVELS["quiet"]
+    else:
+        level = LOG_LEVELS["default"]
+
+    logging.basicConfig(level=level, format=LOG_FORMAT, stream=sys.stdout, force=True)
+    return level
 
 
 def add_run_args(parser: argparse.ArgumentParser) -> None:
@@ -113,8 +138,8 @@ def handle_generate(args: argparse.Namespace) -> None:
         },
     )
 
-    print(f"Run created: {paths.run_dir}")
-    print(f"Wrote {args.n} rows -> {out_csv}")
+    logger.info("Run created: %s", paths.run_dir)
+    logger.info("Wrote %s rows -> %s", args.n, out_csv)
 
 
 def handle_analyze(args: argparse.Namespace) -> None:
@@ -131,7 +156,7 @@ def handle_analyze(args: argparse.Namespace) -> None:
 
     result = boltzmann_thermo_from_csv(csv_path, T=args.T, energy_col=args.energy_col)
     write_thermo_txt(result, out_txt)
-    print(out_txt.read_text(encoding="utf-8"))
+    logger.info("%s", out_txt.read_text(encoding="utf-8"))
 
 
 def handle_sweep(args: argparse.Namespace) -> None:
@@ -159,12 +184,12 @@ def handle_sweep(args: argparse.Namespace) -> None:
     rows = sweep_thermo_from_csv(csv_path, t_values, energy_col=args.energy_col)
 
     write_thermo_vs_T_csv(rows, out_csv)
-    print(f"Wrote: {out_csv}")
+    logger.info("Wrote: %s", out_csv)
 
     if args.plot:
         try:
             plot_thermo_vs_T(rows, out_png)
-            print(f"Wrote: {out_png}")
+            logger.info("Wrote: %s", out_png)
         except ModuleNotFoundError as e:
             raise SystemExit(
                 "Plotting requires matplotlib. Install with:\n"
@@ -175,28 +200,29 @@ def handle_sweep(args: argparse.Namespace) -> None:
 
 
 def handle_doctor(args: argparse.Namespace) -> None:
-    print("ganmg doctor")
-    print("-" * 60)
+    logger.info("ganmg doctor")
+    logger.info("%s", "-" * 60)
 
-    print(f"python_executable : {sys.executable}")
-    print(f"python_version    : {sys.version.split()[0]}")
-    print(f"platform          : {platform.platform()}")
-    print(f"cwd               : {Path.cwd()}")
+    logger.info("python_executable : %s", sys.executable)
+    logger.info("python_version    : %s", sys.version.split()[0])
+    logger.info("platform          : %s", platform.platform())
+    logger.info("cwd               : %s", Path.cwd())
 
     try:
         import gan_mg
 
         pkg_path = Path(gan_mg.__file__).resolve()
-        print(f"gan_mg_package    : {pkg_path}")
+        logger.info("gan_mg_package    : %s", pkg_path)
     except Exception as e:
-        print(f"gan_mg_package    : <ERROR> {e}")
+        logger.info("gan_mg_package    : <ERROR> %s", e)
 
     mpl = importlib.util.find_spec("matplotlib")
-    print(f"matplotlib        : {'available' if mpl is not None else 'missing'}")
+    logger.info("matplotlib        : %s", "available" if mpl is not None else "missing")
 
-    print(f"default_run_dir   : {Path(args.run_dir).resolve()}")
+    logger.info("default_run_dir   : %s", Path(args.run_dir).resolve())
+    logger.info("logging_level     : %s", logging.getLevelName(logging.getLogger().getEffectiveLevel()))
 
-    print("-" * 60)
+    logger.info("%s", "-" * 60)
 
 
 def handle_runs(args: argparse.Namespace, runs_parser: argparse.ArgumentParser) -> None:
@@ -205,11 +231,11 @@ def handle_runs(args: argparse.Namespace, runs_parser: argparse.ArgumentParser) 
     if args.runs_command == "list":
         runs = list_runs(run_root)
         if not runs:
-            print("No runs found.")
+            logger.info("No runs found.")
             return
 
-        print(f"{'Run ID':<35} {'n':<5} {'seed':<5}")
-        print("-" * 50)
+        logger.info("%s", f"{'Run ID':<35} {'n':<5} {'seed':<5}")
+        logger.info("%s", "-" * 50)
 
         runs = sorted(runs, key=lambda p: p.stat().st_mtime, reverse=True)
 
@@ -217,14 +243,14 @@ def handle_runs(args: argparse.Namespace, runs_parser: argparse.ArgumentParser) 
             meta = load_run_meta(run_dir)
             n = meta.get("n", "-")
             seed = meta.get("seed", "-")
-            print(f"{run_dir.name:<35} {n:<5} {seed:<5}")
+            logger.info("%s", f"{run_dir.name:<35} {n:<5} {seed:<5}")
 
     elif args.runs_command == "latest":
         try:
             latest = latest_run_id(run_root)
-            print(latest)
+            logger.info("%s", latest)
         except FileNotFoundError:
-            print("No runs found.")
+            logger.info("No runs found.")
 
     else:
         runs_parser.print_help()
@@ -232,6 +258,16 @@ def handle_runs(args: argparse.Namespace, runs_parser: argparse.ArgumentParser) 
 
 def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser]:
     parser = argparse.ArgumentParser(prog="ganmg")
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable debug logging.",
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress non-essential output.",
+    )
     subparsers = parser.add_subparsers(dest="command")
 
     build_generate_parser(subparsers)
@@ -246,6 +282,7 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser]:
 def main() -> None:
     parser, runs_parser = build_parser()
     args = parser.parse_args()
+    configure_logging(verbose=args.verbose, quiet=args.quiet)
 
     if args.command == "generate":
         handle_generate(args)

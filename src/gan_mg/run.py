@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -28,6 +32,7 @@ def init_run(run_root: Path, run_id: str) -> RunPaths:
     run_dir = Path(run_root) / run_id
     inputs_dir = run_dir / "inputs"
     outputs_dir = run_dir / "outputs"
+    logger.debug("Initializing run directory at %s", run_dir)
     inputs_dir.mkdir(parents=True, exist_ok=False)
     outputs_dir.mkdir(parents=True, exist_ok=False)
 
@@ -36,6 +41,7 @@ def init_run(run_root: Path, run_id: str) -> RunPaths:
 
 
 def write_run_meta(meta_path: Path, meta: dict) -> None:
+    logger.debug("Writing run metadata to %s", meta_path)
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
 
@@ -45,8 +51,11 @@ def list_runs(run_root: Path) -> list[Path]:
     """
     run_root = Path(run_root)
     if not run_root.exists():
+        logger.debug("Run root does not exist: %s", run_root)
         return []
-    return sorted([p for p in run_root.iterdir() if p.is_dir()])
+    runs = sorted([p for p in run_root.iterdir() if p.is_dir()])
+    logger.debug("Discovered %d run(s) under %s", len(runs), run_root)
+    return runs
 
 
 def latest_run_id(run_root: Path) -> str:
@@ -62,12 +71,11 @@ def latest_run_id(run_root: Path) -> str:
     return latest.name
 
 
-import json
-
-
 def load_run_meta(run_dir: Path) -> dict:
     """Load run.json metadata for a given run directory."""
     meta_path = run_dir / "run.json"
     if not meta_path.exists():
+        logger.debug("No run metadata file at %s", meta_path)
         return {}
+    logger.debug("Loading run metadata from %s", meta_path)
     return json.loads(meta_path.read_text(encoding="utf-8"))

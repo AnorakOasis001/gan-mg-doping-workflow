@@ -62,3 +62,32 @@ def test_cli_generate_analyze_sweep_end_to_end(tmp_path: Path) -> None:
         "free_energy_mix_eV",
     }
     assert set(rows[0].keys()) == expected_headers
+
+
+def test_cli_doctor_reports_logging_level(tmp_path: Path) -> None:
+    default = _run_cli("doctor", "--run-dir", "runs", cwd=tmp_path)
+    assert "logging_level     : INFO" in default.stdout
+
+    verbose = _run_cli("--verbose", "doctor", "--run-dir", "runs", cwd=tmp_path)
+    assert "logging_level     : DEBUG" in verbose.stdout
+
+    quiet = _run_cli("--quiet", "doctor", "--run-dir", "runs", cwd=tmp_path)
+    assert quiet.stdout == ""
+
+
+def test_cli_verbose_and_quiet_flags_conflict(tmp_path: Path) -> None:
+    env = os.environ.copy()
+    src_path = str(REPO_ROOT / "src")
+    env["PYTHONPATH"] = src_path if not env.get("PYTHONPATH") else f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
+
+    completed = subprocess.run(
+        [sys.executable, "-m", "gan_mg.cli", "--verbose", "--quiet", "doctor"],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "--verbose and --quiet cannot be used together" in completed.stderr
