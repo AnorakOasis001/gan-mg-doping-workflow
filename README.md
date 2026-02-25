@@ -230,6 +230,32 @@ Continuous Integration runs automatically on push and pull requests.
 
 ---
 
+## Release process
+
+This project uses a lightweight semantic-ish versioning flow.
+
+Version is defined in exactly one place:
+
+* `pyproject.toml` → `[project].version`
+
+Version bump guidance:
+
+* `PATCH` (`x.y.Z`): bug fixes, docs-only updates, refactors that do not change public behavior.
+* `MINOR` (`x.Y.z`): new backwards-compatible CLI options, analyses, or workflow features.
+* `MAJOR` (`X.y.z`): breaking changes to CLI contract, output schema, or package API.
+
+Release checklist:
+
+1. Update `pyproject.toml` version.
+2. Add a new dated section in `CHANGELOG.md` summarizing Added/Changed/Fixed.
+3. Run tests (`pytest`) and smoke workflow checks.
+4. Create a release commit: `chore(release): v<version>`.
+5. Tag the commit: `git tag v<version>` and push branch + tags.
+
+For pre-1.0 development, breaking changes may still occur, but we still follow the same bump intent to keep release history clear.
+
+---
+
 ## Project Goals
 
 This repository demonstrates:
