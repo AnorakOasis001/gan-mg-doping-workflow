@@ -20,6 +20,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]" --no-build-isolation
 
-      - name: Smoke test (bash)
+      - name: Smoke test
         run: |
           bash scripts/00_smoke_test.sh
