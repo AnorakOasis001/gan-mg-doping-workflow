@@ -8,6 +8,7 @@ plot = ["matplotlib>=3.8"]
 
 [project]
 name = "gan-mg-doping-workflow"
+# Single source of truth for package/release version.
 version = "0.1.0"
 description = "Scientific ML workflow for Mg-doped GaN: structure generation, relaxation, and thermodynamic analysis."
 readme = "README.md"
