@@ -78,6 +78,56 @@ def test_cli_doctor_reports_logging_level(tmp_path: Path) -> None:
     assert quiet.stdout == ""
 
 
+def test_cli_profile_outputs_runtime_and_config_count(tmp_path: Path) -> None:
+    pytest.importorskip("pandas")
+    run_dir = tmp_path / "runs"
+    run_id = "profile-run"
+
+    generate = _run_cli(
+        "--profile",
+        "generate",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--n",
+        "6",
+        "--seed",
+        "11",
+        cwd=tmp_path,
+    )
+    assert "[profile] generate runtime_s=" in generate.stdout
+    assert "num_configurations=6" in generate.stdout
+
+    analyze = _run_cli(
+        "--profile",
+        "analyze",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--T",
+        "298.15",
+        cwd=tmp_path,
+    )
+    assert "[profile] analyze runtime_s=" in analyze.stdout
+    assert "num_configurations=6" in analyze.stdout
+
+    sweep = _run_cli(
+        "--profile",
+        "sweep",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--nT",
+        "7",
+        cwd=tmp_path,
+    )
+    assert "[profile] sweep runtime_s=" in sweep.stdout
+    assert "num_configurations=6" in sweep.stdout
+
+
 def test_cli_verbose_and_quiet_flags_conflict(tmp_path: Path) -> None:
     env = os.environ.copy()
     src_path = str(REPO_ROOT / "src")
