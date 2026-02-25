@@ -8,6 +8,7 @@ import sys
 import time
 from pathlib import Path
 
+from gan_mg import __version__
 from gan_mg.analysis.thermo import (
     boltzmann_thermo_from_csv,
     plot_thermo_vs_T,
@@ -18,6 +19,7 @@ from gan_mg.analysis.thermo import (
 from gan_mg.demo.generate import generate_demo_csv
 from gan_mg.run import (
     init_run,
+    compute_reproducibility_hash,
     latest_run_id,
     list_runs,
     load_run_meta,
@@ -206,6 +208,12 @@ def handle_sweep(args: argparse.Namespace) -> None:
         for i in range(args.nT)
     ]
 
+    reproducibility_hash = compute_reproducibility_hash(
+        input_csv=csv_path,
+        temperature_grid=t_values,
+        code_version=__version__,
+    )
+
     try:
         rows = sweep_thermo_from_csv(csv_path, t_values, energy_col=args.energy_col)
     except ValueError as e:
@@ -213,6 +221,11 @@ def handle_sweep(args: argparse.Namespace) -> None:
 
     write_thermo_vs_T_csv(rows, out_csv)
     logger.info("Wrote: %s", out_csv)
+
+    if args.csv is None:
+        meta = load_run_meta(run_dir)
+        meta["reproducibility_hash"] = reproducibility_hash
+        write_run_meta(run_dir / "run.json", meta)
 
     if args.plot:
         try:
