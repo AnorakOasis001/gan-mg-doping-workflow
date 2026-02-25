@@ -95,6 +95,7 @@ runs/smoke/
     thermo_T1000.txt
     thermo_vs_T.csv
     thermo_vs_T.png
+    metrics.json
 ```
 
 If matplotlib is not installed, omit `--plot`.
@@ -153,6 +154,34 @@ ganmg sweep \
   --tmax 1200 \
   --tstep 100 \
   [--plot]
+```
+
+### Runs
+
+Inspect run history and show metadata + latest standardized metrics summary.
+
+```bash
+ganmg runs list
+ganmg runs latest
+ganmg runs show --run-id <id>
+```
+
+Example `runs/<id>/outputs/metrics.json`:
+
+```json
+{
+  "command": "analyze",
+  "temperature_K": 1000.0,
+  "num_configurations": 10,
+  "mixing_energy_min_eV": -2.053,
+  "mixing_energy_avg_eV": -1.998,
+  "partition_function": 2.041,
+  "free_energy_mix_eV": -2.113,
+  "reproducibility_hash": "<sha256>",
+  "timings": {
+    "runtime_s": 0.012
+  }
+}
 ```
 
 ---
