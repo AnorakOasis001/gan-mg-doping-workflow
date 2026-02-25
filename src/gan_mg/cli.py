@@ -5,6 +5,7 @@ import importlib.util
 import logging
 import platform
 import sys
+import time
 from pathlib import Path
 
 from gan_mg.analysis.thermo import (
@@ -32,6 +33,16 @@ LOG_LEVELS = {
     "verbose": logging.DEBUG,
 }
 logger = logging.getLogger(__name__)
+
+
+def log_profile(stage: str, start_time: float, num_configurations: int) -> None:
+    elapsed_s = time.perf_counter() - start_time
+    logger.info(
+        "[profile] %s runtime_s=%.6f num_configurations=%d",
+        stage,
+        elapsed_s,
+        num_configurations,
+    )
 
 
 
@@ -124,6 +135,7 @@ def build_doctor_parser(subparsers: argparse._SubParsersAction[argparse.Argument
 
 
 def handle_generate(args: argparse.Namespace) -> None:
+    stage_start = time.perf_counter()
     run_id = args.run_id or make_run_id(seed=args.seed, n=args.n)
     paths = init_run(Path(args.run_dir), run_id)
 
@@ -143,9 +155,12 @@ def handle_generate(args: argparse.Namespace) -> None:
 
     logger.info("Run created: %s", paths.run_dir)
     logger.info("Wrote %s rows -> %s", args.n, out_csv)
+    if args.profile:
+        log_profile("generate", stage_start, num_configurations=args.n)
 
 
 def handle_analyze(args: argparse.Namespace) -> None:
+    stage_start = time.perf_counter()
     if args.run_id is None and args.csv is None:
         args.run_id = latest_run_id(Path(args.run_dir))
 
@@ -164,9 +179,12 @@ def handle_analyze(args: argparse.Namespace) -> None:
 
     write_thermo_txt(result, out_txt)
     logger.info("%s", out_txt.read_text(encoding="utf-8"))
+    if args.profile:
+        log_profile("analyze", stage_start, num_configurations=result.num_configurations)
 
 
 def handle_sweep(args: argparse.Namespace) -> None:
+    stage_start = time.perf_counter()
     if args.csv is None:
         if args.run_id is None:
             args.run_id = latest_run_id(Path(args.run_dir))
@@ -207,6 +225,10 @@ def handle_sweep(args: argparse.Namespace) -> None:
                 "or\n"
                 "  python -m pip install -e '.[dev,plot]'\n"
             ) from e
+
+    if args.profile:
+        num_configurations = 0 if not rows else int(rows[0]["num_configurations"])
+        log_profile("sweep", stage_start, num_configurations=num_configurations)
 
 
 def handle_doctor(args: argparse.Namespace) -> None:
@@ -277,6 +299,11 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser]:
         "--quiet",
         action="store_true",
         help="Suppress non-essential output.",
+    )
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        help="Print runtime and configuration count for generate/analyze/sweep.",
     )
     subparsers = parser.add_subparsers(dest="command")
 
