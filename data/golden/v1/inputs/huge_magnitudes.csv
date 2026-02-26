@@ -1,0 +1,7 @@
+structure_id,mechanism,energy_eV
+s001,mg_ga,-1000.0
+s002,mg_i,-500.0
+s003,vn,-1.0
+s004,combo,0.0
+s005,mg_ga,500.0
+s006,mg_i,1000.0
