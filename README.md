@@ -2,6 +2,9 @@
 
 # gan-mg-doping-workflow
 
+[![CI (GitHub Actions)](https://img.shields.io/badge/CI-GitHub_Actions-2088FF?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
+[![Docs (GitHub Pages)](https://img.shields.io/badge/Docs-GitHub_Pages-222222?logo=githubpages&logoColor=white)](.github/workflows/docs.yml)
+
 Reproducible Scientific ML workflow for thermodynamic analysis of Mg-doped GaN using structured, CLI-driven pipelines.
 
 This repository demonstrates the evolution of a research codebase into a reproducible, testable, production-style scientific software project suitable for AI-for-Science and computational materials workflows.
@@ -21,6 +24,36 @@ This repository demonstrates the evolution of a research codebase into a reprodu
 * Structured repository layout (`src/` pattern)
 
 The project is intentionally structured to reflect research software engineering best practices.
+
+## Quickstart (2 minutes)
+
+```bash
+# macOS / Linux
+python -m venv .venv
+source .venv/bin/activate
+
+# Windows (PowerShell)
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+
+python -m pip install -U pip
+python -m pip install -e ".[dev]"
+# Optional: docs toolchain
+python -m pip install -e ".[docs]"
+
+python examples/minimal_end_to_end/run_example.py
+pytest -q
+```
+
+Minimal example outputs are written to `examples/minimal_end_to_end/_outputs/`.
+
+## Reproducibility guarantees
+
+* Golden regression tests lock thermodynamic outputs for committed fixtures.
+* Streaming parity tests ensure streaming and in-memory execution agree within strict tolerances.
+* Deterministic fixtures are committed under `data/golden/v1/`.
+* Documentation is validated with a strict MkDocs build.
+* CI runs on both Ubuntu and Windows.
 
 ### GitHub Pages quick note
 
