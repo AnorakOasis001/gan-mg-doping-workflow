@@ -14,6 +14,7 @@ Editable install is required; do not run modules directly from `src/`.
 ## Optional docs tooling
 
 Documentation dependencies are intentionally separate from runtime dependencies.
+Install docs dependencies with `pip install -e ".[docs]"`; MkDocs is pinned to `<2` due to current `mkdocs-material` compatibility.
 
 ```bash
 python -m pip install -e ".[docs]"
