@@ -1,0 +1,8 @@
+schema_version = 1
+
+[analyze]
+csv = "../../data/golden/v1/inputs/realistic_small.csv"
+T = 300.0
+energy_col = "energy_eV"
+diagnostics = true
+output_root = "_outputs_from_config"

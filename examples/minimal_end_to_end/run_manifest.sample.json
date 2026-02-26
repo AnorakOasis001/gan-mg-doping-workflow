@@ -1,0 +1,14 @@
+{
+  "config_schema_version": 1,
+  "config_sha256": "<sha256-of-config>",
+  "git_commit": "<git-commit-or-null>",
+  "input_csv_sha256": "<sha256-of-input-csv>",
+  "package_version": "0.1.0",
+  "platform": "<platform>",
+  "produced_outputs": [
+    ".../results/tables/demo_thermo.txt",
+    ".../results/tables/diagnostics_T300.json",
+    ".../results/tables/metrics.json"
+  ],
+  "python_version": "<python-version>"
+}
