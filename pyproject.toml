@@ -15,7 +15,7 @@ version = "0.1.0"
 description = "Scientific ML workflow for Mg-doped GaN: structure generation, relaxation, and thermodynamic analysis."
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["pandas>=2.0"]
+dependencies = ["pandas>=2.0", "tomli>=2.0; python_version < '3.11'"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

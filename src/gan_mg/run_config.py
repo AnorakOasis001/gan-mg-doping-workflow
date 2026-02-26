@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from gan_mg import __version__
+from gan_mg._toml import load_toml
 from gan_mg.analysis.thermo import (
     boltzmann_diagnostics_from_energies,
     boltzmann_thermo_from_csv,
@@ -20,14 +21,6 @@ from gan_mg.analysis.thermo import (
 
 SCHEMA_VERSION = 1
 
-
-def _load_toml(path: Path) -> dict[str, Any]:
-    try:
-        import tomllib  # type: ignore[attr-defined]
-    except ModuleNotFoundError:  # pragma: no cover - fallback path for older Python
-        import tomli as tomllib  # type: ignore[no-redef]
-
-    return tomllib.loads(path.read_text(encoding="utf-8"))
 
 
 def _file_sha256(path: Path) -> str:
@@ -59,7 +52,7 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def run_from_config(config_path: Path) -> None:
     config_path = Path(config_path)
-    config = _load_toml(config_path)
+    config = load_toml(config_path)
 
     version = int(config.get("schema_version", -1))
     if version != SCHEMA_VERSION:
