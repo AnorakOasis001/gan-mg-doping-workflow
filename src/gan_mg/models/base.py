@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol, Sequence
+from typing import Any, Protocol, Sequence
 
 
 @dataclass(frozen=True)
@@ -16,5 +16,5 @@ class StructureConfig:
 class EnergyModel(Protocol):
     """Interface for energy evaluators that return mixing energies in eV."""
 
-    def evaluate(self, configs: Sequence[StructureConfig]) -> list[float]:
+    def evaluate(self, configs: Sequence[Any]) -> list[float]:
         """Return one mixing energy (eV) per input configuration."""

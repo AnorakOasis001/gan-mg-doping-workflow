@@ -104,7 +104,7 @@ def build_generate_parser(subparsers: argparse._SubParsersAction[argparse.Argume
     parser.add_argument("--seed", type=int, default=7, help="Random seed.")
     parser.add_argument(
         "--model",
-        choices=["demo", "toy", "mace"],
+        choices=["demo", "toy"],
         default="demo",
         help="Energy model backend used during generation.",
     )
@@ -232,10 +232,7 @@ def handle_generate(args: argparse.Namespace) -> None:
     paths = init_run(Path(args.run_dir), run_id)
 
     out_csv = paths.inputs_dir / "results.csv"
-    try:
-        generate_demo_csv(n=args.n, seed=args.seed, out_csv=out_csv, model_name=args.model)
-    except NotImplementedError as e:
-        raise SystemExit(str(e)) from e
+    generate_demo_csv(n=args.n, seed=args.seed, out_csv=out_csv, model_name=args.model)
 
     write_run_meta(
         paths.meta_path,

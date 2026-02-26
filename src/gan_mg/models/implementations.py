@@ -8,7 +8,7 @@ from gan_mg.models.base import EnergyModel, StructureConfig
 
 
 @dataclass(frozen=True)
-class DemoModel(EnergyModel):
+class DemoEnergyModel(EnergyModel):
     """Existing demo behavior: seeded pseudo-random energies in [-0.8, 0.2] eV."""
 
     seed: int
@@ -19,7 +19,7 @@ class DemoModel(EnergyModel):
 
 
 @dataclass(frozen=True)
-class ToyPairPotentialModel(EnergyModel):
+class ToyPairEnergyModel(EnergyModel):
     """Deterministic toy model based on mechanism offsets + pairwise penalty."""
 
     pair_strength_eV: float = 0.35
@@ -36,3 +36,8 @@ class ToyPairPotentialModel(EnergyModel):
             structure_term = ((sum(ord(ch) for ch in cfg.structure_id) % 17) - 8) * 0.003
             energies.append(round(base + pair_penalty + structure_term, 6))
         return energies
+
+
+# Backward-compatible aliases
+DemoModel = DemoEnergyModel
+ToyPairPotentialModel = ToyPairEnergyModel

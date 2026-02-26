@@ -22,8 +22,8 @@ def test_generate_is_deterministic_for_fixed_seed_demo_and_toy(tmp_path: Path) -
     generate_demo_csv(n=8, seed=17, out_csv=toy_1, model_name="toy")
     generate_demo_csv(n=8, seed=17, out_csv=toy_2, model_name="toy")
 
-    assert _read_energy_column(demo_1) == _read_energy_column(demo_2)
-    assert _read_energy_column(toy_1) == _read_energy_column(toy_2)
+    assert demo_1.read_text(encoding="utf-8") == demo_2.read_text(encoding="utf-8")
+    assert toy_1.read_text(encoding="utf-8") == toy_2.read_text(encoding="utf-8")
 
 
 def test_models_produce_different_energy_sequences(tmp_path: Path) -> None:

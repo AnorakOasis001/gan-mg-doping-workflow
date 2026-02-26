@@ -8,14 +8,25 @@ The project exposes the `ganmg` command-line interface.
 ganmg generate --run-id demo --seed 123
 ```
 
+Or select an energy backend explicitly:
+
+```bash
+# Seeded pseudo-random baseline
+ganmg generate --run-id demo-backend --seed 11 --model demo
+
+# Deterministic toy pair-energy backend
+ganmg generate --run-id toy-backend --seed 11 --model toy
+```
+
 Writes deterministic synthetic input data to:
 
-- `runs/demo/inputs/results.csv`
+- `runs/<run-id>/inputs/results.csv`
+- `runs/<run-id>/run.json` (includes the selected `model`)
 
 ## Analyze at one temperature
 
 ```bash
-ganmg analyze --run-id demo --temperature 1000
+ganmg analyze --run-id demo --T 1000
 ```
 
 Writes a thermodynamic report to:
@@ -36,8 +47,8 @@ Writes:
 ## Typical smoke flow
 
 ```bash
-ganmg generate --run-id smoke --seed 123
-ganmg analyze --run-id smoke --temperature 1000
+ganmg generate --run-id smoke --seed 123 --model toy
+ganmg analyze --run-id smoke --T 1000
 ganmg sweep --run-id smoke --tmin 300 --tmax 1200 --tstep 100
 ```
 
@@ -50,8 +61,6 @@ ganmg bench thermo --n 1000 --nT 50
 Writes:
 
 - `outputs/bench.json`
-
-
 
 ## Regenerate run figures
 
