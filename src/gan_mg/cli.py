@@ -32,7 +32,7 @@ from gan_mg.analysis.thermo import (
 from gan_mg.demo.generate import generate_demo_csv
 from gan_mg.analysis.figures import regenerate_thermo_figure
 from gan_mg.import_results import import_results_to_run
-from gan_mg.validation import validate_output_file
+from gan_mg.validation import ValidationError, validate_output_file
 from gan_mg.run import (
     init_run,
     compute_reproducibility_hash,
@@ -52,6 +52,21 @@ LOG_LEVELS = {
 }
 logger = logging.getLogger(__name__)
 SCHEMA_VERSION = "1.1"
+
+COMMON_FLOW_EXAMPLES = """Examples:
+  # Minimal end-to-end run
+  ganmg generate --run-id demo --n 8 --seed 11
+  ganmg analyze --run-id demo --T 1000 --validate-output
+
+  # Config-driven run (PR10)
+  ganmg --config configs/run_config.toml
+
+  # Validate outputs from an existing run (PR11)
+  ganmg analyze --run-id demo --T 1000 --diagnostics --validate-output
+
+  # Regenerate deterministic golden fixtures
+  python scripts/generate_golden.py
+"""
 
 
 def get_git_commit() -> str | None:
@@ -321,6 +336,15 @@ def _should_validate_output(args: argparse.Namespace) -> bool:
     return bool(getattr(args, "validate_output", False) or env_enabled)
 
 
+def _validate_output_or_exit(path: Path, *, kind: str) -> None:
+    try:
+        validate_output_file(path, kind=kind)
+    except ValidationError as e:
+        raise SystemExit(
+            f"Output validation failed: file={path}, first_error_path={e.path}, detail={e.message}"
+        ) from e
+
+
 def handle_analyze(args: argparse.Namespace) -> None:
     stage_start = time.perf_counter()
     if args.run_id is None and args.csv is None:
@@ -346,6 +370,8 @@ def handle_analyze(args: argparse.Namespace) -> None:
                 energy_column=args.energy_col,
                 chunksize=args.chunksize,
             )
+    except FileNotFoundError as e:
+        raise SystemExit(f"Input file not found: {csv_path} ({e})") from e
     except ValueError as e:
         raise SystemExit(f"Input validation error: {e}") from e
 
@@ -406,9 +432,9 @@ def handle_analyze(args: argparse.Namespace) -> None:
         logger.info("Wrote: %s", diagnostics_path)
 
     if _should_validate_output(args):
-        validate_output_file(metrics_path, kind="metrics")
+        _validate_output_or_exit(metrics_path, kind="metrics")
         if args.diagnostics:
-            validate_output_file(diagnostics_path, kind="diagnostics")
+            _validate_output_or_exit(diagnostics_path, kind="diagnostics")
 
     logger.info("Wrote: %s", metrics_path)
     logger.info("%s", out_txt.read_text(encoding="utf-8"))
@@ -706,7 +732,12 @@ def handle_bench(args: argparse.Namespace, bench_parser: argparse.ArgumentParser
 
 
 def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser, argparse.ArgumentParser]:
-    parser = argparse.ArgumentParser(prog="ganmg")
+    parser = argparse.ArgumentParser(
+        prog="ganmg",
+        description="Reproducible CLI workflow for Mg-doped GaN thermodynamics.",
+        epilog=COMMON_FLOW_EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         "--config",
         type=Path,
@@ -750,7 +781,17 @@ def main() -> None:
     if args.config is not None:
         from gan_mg.run_config import run_from_config
 
-        run_from_config(args.config)
+        config_path = Path(args.config)
+        if not config_path.exists():
+            raise SystemExit(f"Config file not found: {config_path}")
+        try:
+            run_from_config(config_path)
+        except ValidationError as e:
+            raise SystemExit(
+                f"Output validation failed: first_error_path={e.path}, detail={e.message}"
+            ) from e
+        except ValueError as e:
+            raise SystemExit(f"Config validation error: {e}") from e
         return
 
     if args.command == "generate":
