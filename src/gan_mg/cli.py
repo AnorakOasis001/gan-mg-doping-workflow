@@ -562,6 +562,7 @@ def handle_bench(args: argparse.Namespace, bench_parser: argparse.ArgumentParser
     sweep_start = time.perf_counter()
     results = [boltzmann_thermo_from_energies(energies, T=t) for t in temperatures]
     sweep_runtime_s = _runtime_seconds(sweep_start)
+    time_per_temperature_ms = (sweep_runtime_s / args.nT) * 1000.0
 
     payload = {
         "command": "bench thermo",
@@ -574,7 +575,7 @@ def handle_bench(args: argparse.Namespace, bench_parser: argparse.ArgumentParser
         },
         "timings": {
             "sweep_runtime_s": sweep_runtime_s,
-            "time_per_temperature_ms": (sweep_runtime_s / args.nT) * 1000.0,
+            "time_per_temperature_ms": time_per_temperature_ms,
         },
         "result_snapshot": {
             "num_configurations": results[0].num_configurations,
@@ -597,10 +598,7 @@ def handle_bench(args: argparse.Namespace, bench_parser: argparse.ArgumentParser
     logger.info("  configurations (n): %d", args.n)
     logger.info("  temperatures (nT) : %d", args.nT)
     logger.info("  sweep runtime (s) : %.6f", sweep_runtime_s)
-    logger.info(
-        "  time / temperature : %.3f ms",
-        payload["timings"]["time_per_temperature_ms"],
-    )
+    logger.info("  time / temperature : %.3f ms", time_per_temperature_ms)
 
 
 def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser, argparse.ArgumentParser]:
