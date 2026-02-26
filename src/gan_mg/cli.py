@@ -9,15 +9,19 @@ import platform
 import random
 import sys
 import time
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from gan_mg import __version__
 from gan_mg.analysis.thermo import (
+    boltzmann_diagnostics_from_energies,
     boltzmann_thermo_from_energies,
     boltzmann_thermo_from_csv,
+    diagnostics_from_csv_streaming,
     plot_thermo_vs_T,
+    read_energies_csv,
     sweep_thermo_from_csv,
     thermo_from_csv_streaming,
     write_thermo_txt,
@@ -130,6 +134,11 @@ def build_analyze_parser(subparsers: argparse._SubParsersAction[argparse.Argumen
         type=int,
         default=None,
         help="Optional CSV chunk size for streaming analysis.",
+    )
+    parser.add_argument(
+        "--diagnostics",
+        action="store_true",
+        help="Write additional canonical ensemble diagnostics JSON (does not change existing outputs).",
     )
     return parser
 
@@ -268,9 +277,11 @@ def handle_analyze(args: argparse.Namespace) -> None:
         run_dir = Path(args.run_dir) / args.run_id
         csv_path = Path(args.csv) if args.csv else (run_dir / "inputs" / "results.csv")
         out_txt = run_dir / "outputs" / f"thermo_T{int(args.T)}.txt"
+        diagnostics_path = run_dir / "outputs" / f"diagnostics_T{int(args.T)}.json"
     else:
         csv_path = Path(args.csv)
         out_txt = Path("results") / "tables" / "demo_thermo.txt"
+        diagnostics_path = Path("results") / "tables" / f"diagnostics_T{int(args.T)}.json"
 
     try:
         if args.chunksize is None:
@@ -321,6 +332,20 @@ def handle_analyze(args: argparse.Namespace) -> None:
         write_metrics_json(metrics_path, metrics)
 
     write_thermo_txt(result, out_txt)
+    if args.diagnostics:
+        if args.chunksize is None:
+            energies = read_energies_csv(csv_path, energy_col=args.energy_col)
+            diagnostics = boltzmann_diagnostics_from_energies(energies, T=args.T)
+        else:
+            diagnostics = diagnostics_from_csv_streaming(
+                csv_path=csv_path,
+                temperature_K=args.T,
+                energy_column=args.energy_col,
+                chunksize=args.chunksize,
+            )
+        write_metrics_json(diagnostics_path, asdict(diagnostics))
+        logger.info("Wrote: %s", diagnostics_path)
+
     logger.info("Wrote: %s", metrics_path)
     logger.info("%s", out_txt.read_text(encoding="utf-8"))
     if args.profile:

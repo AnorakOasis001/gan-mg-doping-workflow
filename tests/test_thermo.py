@@ -8,8 +8,10 @@ from gan_mg.analysis.thermo import (
     K_B_EV_PER_K,
     LogSumExpAccumulator,
     RunningStats,
+    boltzmann_diagnostics_from_energies,
     boltzmann_thermo_from_energies,
     boltzmann_thermo_from_csv,
+    diagnostics_from_csv_streaming,
     log_partition_function,
     thermo_from_csv_streaming,
     validate_results_dataframe,
@@ -200,3 +202,78 @@ def test_running_stats_and_logsumexp_require_data() -> None:
 def test_invalid_inputs(delta_e: np.ndarray, temperature: float, message: str) -> None:
     with pytest.raises(ValueError, match=message):
         log_partition_function(delta_e_eV=delta_e, temperature_K=temperature)
+
+
+def test_boltzmann_diagnostics_streaming_matches_in_memory(tmp_path: Path) -> None:
+    pd = pytest.importorskip("pandas")
+    base_energies = [-0.3, -0.1, 0.0, 0.2, 0.2, 1.0]
+    energies = np.asarray(base_energies * (20_000 // len(base_energies)), dtype=float)
+    csv_path = tmp_path / "diagnostics.csv"
+    pd.DataFrame({"energy_eV": energies}).to_csv(csv_path, index=False)
+
+    temperature = 1000.0
+    diag_inmem = boltzmann_diagnostics_from_energies(energies.tolist(), T=temperature)
+    diag_stream = diagnostics_from_csv_streaming(
+        csv_path=csv_path,
+        temperature_K=temperature,
+        energy_column="energy_eV",
+        chunksize=5000,
+    )
+
+    assert diag_stream.temperature_K == pytest.approx(diag_inmem.temperature_K)
+    assert diag_stream.num_configurations == diag_inmem.num_configurations
+    assert diag_stream.expected_energy_eV == pytest.approx(diag_inmem.expected_energy_eV, rel=1e-9, abs=1e-9)
+    assert diag_stream.energy_variance_eV2 == pytest.approx(diag_inmem.energy_variance_eV2, rel=1e-8, abs=1e-8)
+    assert diag_stream.p_min == pytest.approx(diag_inmem.p_min, rel=1e-9, abs=1e-9)
+    assert diag_stream.effective_sample_size == pytest.approx(diag_inmem.effective_sample_size, rel=1e-9, abs=1e-9)
+    assert diag_stream.logZ_shifted == pytest.approx(diag_inmem.logZ_shifted, rel=1e-9, abs=1e-9)
+    assert diag_stream.logZ_absolute == pytest.approx(diag_inmem.logZ_absolute, rel=1e-9, abs=1e-9)
+
+
+
+
+def test_boltzmann_diagnostics_low_temperature_dominates_min_state() -> None:
+    energies = [-1.0, -0.5, 0.0, 0.2]
+    diag = boltzmann_diagnostics_from_energies(energies, T=1.0)
+
+    assert diag.p_min > 0.999
+    assert diag.effective_sample_size == pytest.approx(1.0, rel=1e-3, abs=1e-3)
+    assert diag.expected_energy_eV == pytest.approx(-1.0, abs=1e-3)
+def test_boltzmann_diagnostics_identical_energies() -> None:
+    energies = [-0.2] * 250
+    temperature = 1000.0
+
+    diag = boltzmann_diagnostics_from_energies(energies, T=temperature)
+
+    assert diag.expected_energy_eV == pytest.approx(-0.2)
+    assert diag.energy_variance_eV2 == pytest.approx(0.0)
+    assert diag.energy_std_eV == pytest.approx(0.0)
+    assert diag.p_min == pytest.approx(1.0 / len(energies))
+    assert diag.effective_sample_size == pytest.approx(float(len(energies)))
+
+
+def test_boltzmann_diagnostics_invalid_inputs(tmp_path: Path) -> None:
+    pd = pytest.importorskip("pandas")
+
+    with pytest.raises(ValueError, match="Temperature T must be > 0"):
+        boltzmann_diagnostics_from_energies([-0.1, 0.2], T=0.0)
+
+    with pytest.raises(ValueError, match="non-empty"):
+        boltzmann_diagnostics_from_energies([], T=300.0)
+
+    with pytest.raises(ValueError, match="finite"):
+        boltzmann_diagnostics_from_energies([-0.1, float("nan")], T=300.0)
+
+    csv_path = tmp_path / "results.csv"
+    pd.DataFrame({"energy_eV": [-1.0, -0.8]}).to_csv(csv_path, index=False)
+
+    with pytest.raises(ValueError, match="temperature_K must be > 0"):
+        diagnostics_from_csv_streaming(csv_path, temperature_K=0.0, energy_column="energy_eV", chunksize=10)
+
+    with pytest.raises(ValueError, match="missing required column"):
+        diagnostics_from_csv_streaming(csv_path, temperature_K=600.0, energy_column="missing", chunksize=10)
+
+    bad_csv = tmp_path / "bad.csv"
+    pd.DataFrame({"energy_eV": [-1.0, float("inf")]}).to_csv(bad_csv, index=False)
+    with pytest.raises(ValueError, match="must contain only finite values"):
+        diagnostics_from_csv_streaming(bad_csv, temperature_K=600.0, energy_column="energy_eV", chunksize=10)

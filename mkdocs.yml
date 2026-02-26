@@ -20,6 +20,7 @@ nav:
   - Repository README: repository-readme.md
   - Thermodynamics math: thermodynamics-math.md
   - Numerical stability: numerical_stability.md
+  - Ensemble diagnostics: ensemble_diagnostics.md
   - Reproducibility philosophy: reproducibility-philosophy.md
   - Performance & scaling:
       - Overview: performance.md

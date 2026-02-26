@@ -36,6 +36,20 @@ class ThermoSweepRow(TypedDict):
     free_energy_mix_eV: float
 
 
+@dataclass(frozen=True)
+class ThermoDiagnostics:
+    temperature_K: float
+    num_configurations: int
+    expected_energy_eV: float
+    energy_variance_eV2: float
+    energy_std_eV: float
+    p_min: float
+    effective_sample_size: float
+    logZ_shifted: float
+    logZ_absolute: float
+    notes: list[str]
+
+
 REQUIRED_RESULTS_COLUMNS = ("structure_id", "mechanism", "energy_eV")
 
 
@@ -103,6 +117,56 @@ class RunningStats:
         if self._min is None:
             raise ValueError("RunningStats.min is undefined before any updates.")
         return self._min
+
+
+class ScaledExpSumAccumulator:
+    """Accumulate sums of the form Σ a_i * exp(x_i) in a stable scaled representation."""
+
+    def __init__(self) -> None:
+        self._m: float | None = None
+        self._s: float = 0.0
+
+    def update(self, x: NDArray[np.float64], a: NDArray[np.float64]) -> None:
+        if x.size == 0:
+            return
+        if x.shape != a.shape:
+            raise ValueError("x and a must have identical shapes.")
+        if not np.all(np.isfinite(x)):
+            raise ValueError("x must contain only finite values.")
+        if not np.all(np.isfinite(a)):
+            raise ValueError("a must contain only finite values.")
+        if np.any(a < 0.0):
+            raise ValueError("a must be non-negative.")
+
+        mask = a > 0.0
+        if not np.any(mask):
+            return
+
+        x_pos = x[mask]
+        a_pos = a[mask]
+
+        m2 = float(np.max(x_pos))
+        s2 = float(np.sum(a_pos * np.exp(x_pos - m2)))
+
+        if self._m is None:
+            self._m = m2
+            self._s = s2
+            return
+
+        if m2 <= self._m:
+            self._s = self._s + math.exp(m2 - self._m) * s2
+        else:
+            self._s = math.exp(self._m - m2) * self._s + s2
+            self._m = m2
+
+    def is_zero(self) -> bool:
+        return self._m is None or self._s == 0.0
+
+    def value_log(self) -> float:
+        if self.is_zero():
+            return float("-inf")
+        assert self._m is not None
+        return self._m + math.log(self._s)
 
 
 def log_partition_function(delta_e_eV: NDArray[np.float64], temperature_K: float) -> float:
@@ -250,6 +314,164 @@ def boltzmann_thermo_from_energies(energies: list[float], T: float) -> ThermoRes
 def boltzmann_thermo_from_csv(csv_path: Path, T: float, energy_col: str = "energy_eV") -> ThermoResult:
     energies = read_energies_csv(csv_path, energy_col=energy_col)
     return boltzmann_thermo_from_energies(energies, T=T)
+
+
+def boltzmann_diagnostics_from_energies(energies: list[float], T: float) -> ThermoDiagnostics:
+    if T <= 0:
+        raise ValueError("Temperature T must be > 0.")
+    if not energies:
+        raise ValueError("energies must be non-empty.")
+
+    energies_np = np.asarray(energies, dtype=float)
+    if not np.all(np.isfinite(energies_np)):
+        raise ValueError("energies must contain only finite values.")
+
+    beta = 1.0 / (K_B_EV_PER_K * T)
+    emin = float(np.min(energies_np))
+    delta = energies_np - emin
+    x = -beta * delta
+
+    log_z_shifted = log_partition_function(delta_e_eV=delta, temperature_K=T)
+    log_z_absolute = log_z_shifted - beta * emin
+
+    lse_w2 = LogSumExpAccumulator()
+    lse_w2.update(2.0 * x)
+    log_sum_w2 = lse_w2.logsumexp()
+
+    p_min = math.exp(-log_z_shifted)
+    effective_sample_size = math.exp(2.0 * log_z_shifted - log_sum_w2)
+
+    if np.any(delta > 0.0):
+        m = float(np.max(x))
+        exp_shift = np.exp(x - m)
+        sum_delta_exp = float(np.sum(delta * exp_shift))
+        sum_delta2_exp = float(np.sum((delta ** 2) * exp_shift))
+
+        expected_delta = 0.0 if sum_delta_exp == 0.0 else math.exp(m + math.log(sum_delta_exp) - log_z_shifted)
+        expected_delta2 = (
+            0.0
+            if sum_delta2_exp == 0.0
+            else math.exp(m + math.log(sum_delta2_exp) - log_z_shifted)
+        )
+    else:
+        expected_delta = 0.0
+        expected_delta2 = 0.0
+
+    variance_e = max(expected_delta2 - expected_delta ** 2, 0.0)
+    std_e = math.sqrt(variance_e)
+
+    notes: list[str] = []
+    max_log_float = math.log(float(np.finfo(float).max))
+    if log_z_shifted > max_log_float:
+        notes.append("partition_function_overflow")
+
+    return ThermoDiagnostics(
+        temperature_K=T,
+        num_configurations=int(energies_np.size),
+        expected_energy_eV=emin + expected_delta,
+        energy_variance_eV2=variance_e,
+        energy_std_eV=std_e,
+        p_min=p_min,
+        effective_sample_size=effective_sample_size,
+        logZ_shifted=log_z_shifted,
+        logZ_absolute=log_z_absolute,
+        notes=notes,
+    )
+
+
+def diagnostics_from_csv_streaming(
+    csv_path: Path,
+    temperature_K: float,
+    energy_column: str = "energy_eV",
+    chunksize: int = 200_000,
+) -> ThermoDiagnostics:
+    import pandas as pd
+
+    csv_path = Path(csv_path)
+    if temperature_K <= 0:
+        raise ValueError("temperature_K must be > 0.")
+    if chunksize <= 0:
+        raise ValueError("chunksize must be > 0.")
+    if not csv_path.exists():
+        raise ValueError(f"CSV not found: {csv_path}")
+
+    count = 0
+    emin: float | None = None
+    for chunk in pd.read_csv(csv_path, chunksize=chunksize):
+        if energy_column not in chunk.columns:
+            raise ValueError(f"CSV '{csv_path}' is missing required column '{energy_column}'.")
+
+        energies = pd.to_numeric(chunk[energy_column], errors="coerce").to_numpy(dtype=float)
+        if not np.all(np.isfinite(energies)):
+            raise ValueError(
+                f"CSV '{csv_path}' column '{energy_column}' must contain only finite values."
+            )
+        if energies.size == 0:
+            continue
+
+        chunk_min = float(np.min(energies))
+        emin = chunk_min if emin is None else min(emin, chunk_min)
+        count += int(energies.size)
+
+    if count == 0 or emin is None:
+        raise ValueError("CSV must contain at least one energy value.")
+
+    beta = 1.0 / (K_B_EV_PER_K * temperature_K)
+    lse_z = LogSumExpAccumulator()
+    lse_w2 = LogSumExpAccumulator()
+    sum_delta_exp = ScaledExpSumAccumulator()
+    sum_delta2_exp = ScaledExpSumAccumulator()
+
+    for chunk in pd.read_csv(csv_path, chunksize=chunksize):
+        energies = pd.to_numeric(chunk[energy_column], errors="coerce").to_numpy(dtype=float)
+        if not np.all(np.isfinite(energies)):
+            raise ValueError(
+                f"CSV '{csv_path}' column '{energy_column}' must contain only finite values."
+            )
+
+        delta = energies - emin
+        x = -beta * delta
+
+        lse_z.update(x)
+        lse_w2.update(2.0 * x)
+        sum_delta_exp.update(x, delta)
+        sum_delta2_exp.update(x, delta ** 2)
+
+    log_z_shifted = lse_z.logsumexp()
+    log_z_absolute = log_z_shifted - beta * emin
+    log_sum_w2 = lse_w2.logsumexp()
+
+    p_min = math.exp(-log_z_shifted)
+    effective_sample_size = math.exp(2.0 * log_z_shifted - log_sum_w2)
+
+    expected_delta = 0.0
+    if not sum_delta_exp.is_zero():
+        expected_delta = math.exp(sum_delta_exp.value_log() - log_z_shifted)
+
+    expected_delta2 = 0.0
+    if not sum_delta2_exp.is_zero():
+        expected_delta2 = math.exp(sum_delta2_exp.value_log() - log_z_shifted)
+
+    variance_e = max(expected_delta2 - expected_delta ** 2, 0.0)
+    std_e = math.sqrt(variance_e)
+
+    notes: list[str] = []
+    max_log_float = math.log(float(np.finfo(float).max))
+    if log_z_shifted > max_log_float:
+        notes.append("partition_function_overflow")
+
+    return ThermoDiagnostics(
+        temperature_K=temperature_K,
+        num_configurations=count,
+        expected_energy_eV=emin + expected_delta,
+        energy_variance_eV2=variance_e,
+        energy_std_eV=std_e,
+        p_min=p_min,
+        effective_sample_size=effective_sample_size,
+        logZ_shifted=log_z_shifted,
+        logZ_absolute=log_z_absolute,
+        notes=notes,
+    )
 
 
 def thermo_from_csv_streaming(
