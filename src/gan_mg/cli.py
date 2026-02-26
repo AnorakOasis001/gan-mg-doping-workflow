@@ -205,7 +205,7 @@ def build_bench_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentP
         "--out",
         type=Path,
         default=Path("outputs") / "bench.json",
-        help="Path to write benchmark JSON output.",
+        help="Path to write benchmark JSON output (default: outputs/bench.json).",
     )
 
     return parser
@@ -593,7 +593,14 @@ def handle_bench(args: argparse.Namespace, bench_parser: argparse.ArgumentParser
 
     write_metrics_json(args.out, payload)
     logger.info("Wrote: %s", args.out)
-    logger.info("Benchmark runtime: %.6fs", sweep_runtime_s)
+    logger.info("Benchmark timing summary")
+    logger.info("  configurations (n): %d", args.n)
+    logger.info("  temperatures (nT) : %d", args.nT)
+    logger.info("  sweep runtime (s) : %.6f", sweep_runtime_s)
+    logger.info(
+        "  time / temperature : %.3f ms",
+        payload["timings"]["time_per_temperature_ms"],
+    )
 
 
 def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser, argparse.ArgumentParser]:

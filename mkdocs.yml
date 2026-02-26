@@ -22,7 +22,7 @@ nav:
   - Reproducibility philosophy: reproducibility-philosophy.md
   - Performance & scaling:
       - Overview: performance.md
-      - Benchmarking: performance-scaling.md
+      - Benchmarks & CI policy: performance-scaling.md
   - HPC mapping (Mg-doped GaN + MACE): hpc_mapping.md
 
 markdown_extensions:

@@ -1,6 +1,6 @@
 # Performance & scaling
 
-This page summarizes the cost model for thermodynamic sweeps and practical scaling guidance.
+This page summarizes the cost model for thermodynamic sweeps, memory behavior, and practical HPC sizing.
 
 ## Computational complexity
 
@@ -16,7 +16,7 @@ A useful engineering approximation is:
 - total floating-point work grows linearly with number of temperatures
 - doubling both multiplies runtime by ~4x
 
-## Memory scaling
+## Memory considerations
 
 Memory has two common regimes:
 
@@ -30,37 +30,29 @@ Memory has two common regimes:
 
 In practice, materializing all intermediates can dominate RAM long before compute becomes the bottleneck.
 
-## Scaling outlook to 10k configurations
+## Lightweight benchmark
 
-At `N_configs = 10,000`, scaling remains tractable if the implementation stays vectorized and avoids unnecessary materialization.
+Use the built-in benchmark command to time synthetic thermo sweeps in-memory:
 
-Practical expectations:
+```bash
+ganmg bench thermo --n 5000 --nT 50
+```
 
-- runtime increases ~10x relative to a 1k-config baseline at fixed temperature grid
-- memory remains moderate in streaming mode
-- memory can become large if keeping dense per-temperature/per-config intermediates
+By default it writes JSON to `outputs/bench.json` (or a custom path using `--out`). The command prints a timing summary and records parameters, timings, a small result snapshot, and environment metadata.
 
-Operational guidance:
+## Mapping to HPC batch sizes
 
-- keep result tensors minimal (only persist outputs needed for analysis)
-- process configurations in chunks if RAM pressure appears
-- benchmark representative `N_temperatures` (e.g., 50 vs 200) because grid density is a first-order runtime driver
+You can estimate job sizes directly from the complexity model:
 
-## Vectorization and parallelization strategies
+- **Single-job work unit** ≈ `N_configs × N_temperatures`
+- keep work units similar across batch jobs for better queue predictability
+- increase `N_temperatures` for denser phase-resolution studies, and split `N_configs` across array tasks when wall-time limits are strict
 
-Prioritize in this order:
+A practical batching strategy:
 
-1. **NumPy vectorization over configurations**
-   - replace Python loops with array ops for Boltzmann weights and partition-function reductions
-2. **Chunked vectorization**
-   - batch configs into fixed-size blocks to balance cache locality and memory footprint
-3. **Multi-core parallelism over independent axes**
-   - split by configuration chunks or temperature blocks using multiprocessing/joblib
-4. **Distributed sweeps for very large campaigns**
-   - partition independent sweeps across nodes (each node handles a subset; merge summary outputs)
+1. run a local benchmark to measure `time_per_temperature_ms` at representative `N_configs`
+2. convert cluster wall-time budget into a max work unit
+3. partition configuration lists into chunks that fit the budget
+4. launch array jobs where each task processes one chunk over the same temperature grid
 
-Rules of thumb:
-
-- vectorization usually yields the largest single-node gain
-- parallelize only after vectorized baseline is efficient
-- prefer coarse-grained tasks to minimize inter-process communication overhead
+This keeps throughput steady while preserving reproducibility of each batch artifact.
