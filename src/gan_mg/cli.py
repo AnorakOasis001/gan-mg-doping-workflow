@@ -9,6 +9,7 @@ import platform
 import random
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -61,6 +62,10 @@ def write_metrics_json(metrics_path: Path, metrics: dict[str, Any]) -> None:
 
 def _runtime_seconds(start_time: float) -> float:
     return time.perf_counter() - start_time
+
+
+def _iso_utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 
@@ -279,15 +284,16 @@ def handle_analyze(args: argparse.Namespace) -> None:
         timings["runtime_s"] = _runtime_seconds(stage_start)
 
     metrics: dict[str, Any] = {
-        "command": "analyze",
         "temperature_K": result.temperature_K,
         "num_configurations": result.num_configurations,
         "mixing_energy_min_eV": result.mixing_energy_min_eV,
         "mixing_energy_avg_eV": result.mixing_energy_avg_eV,
         "partition_function": result.partition_function,
         "free_energy_mix_eV": result.free_energy_mix_eV,
-        "reproducibility_hash": reproducibility_hash,
+        "created_at": _iso_utc_now(),
     }
+    if reproducibility_hash:
+        metrics["reproducibility_hash"] = reproducibility_hash
     if timings:
         metrics["timings"] = timings
 
@@ -353,22 +359,18 @@ def handle_sweep(args: argparse.Namespace) -> None:
         timings["runtime_s"] = _runtime_seconds(stage_start)
 
     metrics: dict[str, Any] = {
-        "command": "sweep",
         "temperature_grid_K": [row["temperature_K"] for row in rows],
-        "num_configurations": num_configurations,
-        "mixing_energy_min_eV": [row["mixing_energy_min_eV"] for row in rows],
-        "mixing_energy_avg_eV": [row["mixing_energy_avg_eV"] for row in rows],
-        "partition_function": [row["partition_function"] for row in rows],
-        "free_energy_mix_eV": [row["free_energy_mix_eV"] for row in rows],
+        "num_temperatures": len(rows),
         "reproducibility_hash": reproducibility_hash,
+        "created_at": _iso_utc_now(),
     }
     if timings:
         metrics["timings"] = timings
 
     if args.csv is None:
-        metrics_path = run_dir / "outputs" / "metrics.json"
+        metrics_path = run_dir / "outputs" / "metrics_sweep.json"
     else:
-        metrics_path = Path("results") / "tables" / "metrics.json"
+        metrics_path = Path("results") / "tables" / "metrics_sweep.json"
     write_metrics_json(metrics_path, metrics)
     logger.info("Wrote: %s", metrics_path)
 
@@ -487,6 +489,7 @@ def handle_runs(args: argparse.Namespace, runs_parser: argparse.ArgumentParser) 
 
         meta = load_run_meta(run_dir)
         metrics_path = run_dir / "outputs" / "metrics.json"
+        metrics_sweep_path = run_dir / "outputs" / "metrics_sweep.json"
         logger.info("run_id            : %s", args.run_id)
         logger.info("run_dir           : %s", run_dir)
 
@@ -494,12 +497,18 @@ def handle_runs(args: argparse.Namespace, runs_parser: argparse.ArgumentParser) 
             if key in meta:
                 logger.info("%s%s", f"{key:<18}: ", meta[key])
 
-        if metrics_path.exists():
-            latest_metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+        if metrics_path.exists() or metrics_sweep_path.exists():
             logger.info("latest_metrics    :")
-            logger.info("%s", json.dumps(latest_metrics, indent=2))
+            if metrics_path.exists():
+                latest_metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+                logger.info("metrics.json      :")
+                logger.info("%s", json.dumps(latest_metrics, indent=2))
+            if metrics_sweep_path.exists():
+                latest_sweep_metrics = json.loads(metrics_sweep_path.read_text(encoding="utf-8"))
+                logger.info("metrics_sweep.json:")
+                logger.info("%s", json.dumps(latest_sweep_metrics, indent=2))
         else:
-            logger.info("latest_metrics    : <missing> %s", metrics_path)
+            logger.info("latest_metrics    : <missing> %s", run_dir / "outputs")
 
     else:
         runs_parser.print_help()
