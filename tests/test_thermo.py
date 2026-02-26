@@ -230,8 +230,6 @@ def test_boltzmann_diagnostics_streaming_matches_in_memory(tmp_path: Path) -> No
     assert diag_stream.logZ_absolute == pytest.approx(diag_inmem.logZ_absolute, rel=1e-9, abs=1e-9)
 
 
-
-
 def test_boltzmann_diagnostics_low_temperature_dominates_min_state() -> None:
     energies = [-1.0, -0.5, 0.0, 0.2]
     diag = boltzmann_diagnostics_from_energies(energies, T=1.0)
@@ -239,6 +237,8 @@ def test_boltzmann_diagnostics_low_temperature_dominates_min_state() -> None:
     assert diag.p_min > 0.999
     assert diag.effective_sample_size == pytest.approx(1.0, rel=1e-3, abs=1e-3)
     assert diag.expected_energy_eV == pytest.approx(-1.0, abs=1e-3)
+
+
 def test_boltzmann_diagnostics_identical_energies() -> None:
     energies = [-0.2] * 250
     temperature = 1000.0
