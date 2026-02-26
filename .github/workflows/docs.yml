@@ -35,7 +35,8 @@ jobs:
         run: |
           ls -la docs
           find docs -maxdepth 2 -iname "readme.md" -print
-          python -c "import yaml; print(yaml.safe_load(open('mkdocs.yml'))['docs_dir'] if 'docs_dir' in yaml.safe_load(open('mkdocs.yml')) else 'NO docs_dir')"
+          grep -n "^docs_dir:" mkdocs.yml || true
+          sed -n '1,80p' mkdocs.yml
 
       - name: Remove conflicting docs README if generated
         run: |
