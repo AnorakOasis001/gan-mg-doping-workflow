@@ -380,3 +380,29 @@ def test_cli_plot_thermo_creates_figure_when_plot_extra_available(tmp_path: Path
     figure_path = run_dir / run_id / "figures" / "thermo_vs_T.png"
     assert figure_path.exists()
     assert figure_path.stat().st_size > 0
+
+
+def test_cli_bench_thermo_runs_with_small_defaults(tmp_path: Path) -> None:
+    out_path = tmp_path / "outputs" / "bench.json"
+
+    completed = _run_cli(
+        "bench",
+        "thermo",
+        "--n",
+        "16",
+        "--nT",
+        "4",
+        "--out",
+        str(out_path),
+        cwd=tmp_path,
+    )
+
+    assert "Benchmark timing summary" in completed.stdout
+    assert out_path.exists()
+
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["command"] == "bench thermo"
+    assert payload["params"]["n"] == 16
+    assert payload["params"]["nT"] == 4
+    assert payload["timings"]["sweep_runtime_s"] >= 0.0
+    assert payload["timings"]["time_per_temperature_ms"] >= 0.0
