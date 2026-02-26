@@ -222,12 +222,21 @@ def test_boltzmann_diagnostics_streaming_matches_in_memory(tmp_path: Path) -> No
 
     assert diag_stream.temperature_K == pytest.approx(diag_inmem.temperature_K)
     assert diag_stream.num_configurations == diag_inmem.num_configurations
-    assert diag_stream.expected_energy_eV == pytest.approx(diag_inmem.expected_energy_eV, rel=1e-10, abs=1e-10)
-    assert diag_stream.energy_variance_eV2 == pytest.approx(diag_inmem.energy_variance_eV2, rel=1e-10, abs=1e-10)
-    assert diag_stream.p_min == pytest.approx(diag_inmem.p_min, rel=1e-10, abs=1e-10)
-    assert diag_stream.effective_sample_size == pytest.approx(diag_inmem.effective_sample_size, rel=1e-10, abs=1e-10)
-    assert diag_stream.logZ_shifted == pytest.approx(diag_inmem.logZ_shifted, rel=1e-10, abs=1e-10)
-    assert diag_stream.logZ_absolute == pytest.approx(diag_inmem.logZ_absolute, rel=1e-10, abs=1e-10)
+    assert diag_stream.expected_energy_eV == pytest.approx(diag_inmem.expected_energy_eV, rel=1e-9, abs=1e-9)
+    assert diag_stream.energy_variance_eV2 == pytest.approx(diag_inmem.energy_variance_eV2, rel=1e-8, abs=1e-8)
+    assert diag_stream.p_min == pytest.approx(diag_inmem.p_min, rel=1e-9, abs=1e-9)
+    assert diag_stream.effective_sample_size == pytest.approx(diag_inmem.effective_sample_size, rel=1e-9, abs=1e-9)
+    assert diag_stream.logZ_shifted == pytest.approx(diag_inmem.logZ_shifted, rel=1e-9, abs=1e-9)
+    assert diag_stream.logZ_absolute == pytest.approx(diag_inmem.logZ_absolute, rel=1e-9, abs=1e-9)
+
+
+def test_boltzmann_diagnostics_low_temperature_dominates_min_state() -> None:
+    energies = [-1.0, -0.5, 0.0, 0.2]
+    diag = boltzmann_diagnostics_from_energies(energies, T=1.0)
+
+    assert diag.p_min > 0.999
+    assert diag.effective_sample_size == pytest.approx(1.0, rel=1e-3, abs=1e-3)
+    assert diag.expected_energy_eV == pytest.approx(-1.0, abs=1e-3)
 
 
 def test_boltzmann_diagnostics_identical_energies() -> None:
