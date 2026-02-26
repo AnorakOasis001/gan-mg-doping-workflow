@@ -18,6 +18,7 @@ from gan_mg.analysis.thermo import (
     thermo_from_csv_streaming,
     write_thermo_txt,
 )
+from gan_mg.validation import validate_output_file
 
 SCHEMA_VERSION = 1
 
@@ -101,6 +102,7 @@ def run_from_config(config_path: Path) -> None:
         "free_energy_mix_eV": result.free_energy_mix_eV,
     }
     _write_json(metrics_path, metrics_payload)
+    validate_output_file(metrics_path, kind="metrics")
     write_thermo_txt(result, thermo_path)
 
     produced_outputs = [str(metrics_path), str(thermo_path)]
@@ -118,6 +120,7 @@ def run_from_config(config_path: Path) -> None:
             )
 
         _write_json(diagnostics_path, asdict(diagnostics_result))
+        validate_output_file(diagnostics_path, kind="diagnostics")
         produced_outputs.append(str(diagnostics_path))
 
     manifest = {
@@ -130,5 +133,7 @@ def run_from_config(config_path: Path) -> None:
         "produced_outputs": sorted(produced_outputs),
         "python_version": platform.python_version(),
     }
-    _write_json(out_tables / "run_manifest.json", manifest)
+    manifest_path = out_tables / "run_manifest.json"
+    _write_json(manifest_path, manifest)
+    validate_output_file(manifest_path, kind="run_manifest")
 

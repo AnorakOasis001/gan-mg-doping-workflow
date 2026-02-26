@@ -5,6 +5,7 @@ import importlib.util
 import json
 import logging
 import math
+import os
 import platform
 import random
 import subprocess
@@ -31,6 +32,7 @@ from gan_mg.analysis.thermo import (
 from gan_mg.demo.generate import generate_demo_csv
 from gan_mg.analysis.figures import regenerate_thermo_figure
 from gan_mg.import_results import import_results_to_run
+from gan_mg.validation import validate_output_file
 from gan_mg.run import (
     init_run,
     compute_reproducibility_hash,
@@ -180,6 +182,11 @@ def build_analyze_parser(subparsers: argparse._SubParsersAction[argparse.Argumen
         action="store_true",
         help="Write additional canonical ensemble diagnostics JSON (does not change existing outputs).",
     )
+    parser.add_argument(
+        "--validate-output",
+        action="store_true",
+        help="Validate JSON outputs against the output contract (or set GAN_MG_VALIDATE=1).",
+    )
     return parser
 
 
@@ -308,6 +315,12 @@ def handle_generate(args: argparse.Namespace) -> None:
         log_profile("generate", stage_start, num_configurations=args.n)
 
 
+def _should_validate_output(args: argparse.Namespace) -> bool:
+    env_value = os.getenv("GAN_MG_VALIDATE", "").strip().lower()
+    env_enabled = env_value in {"1", "true", "yes", "on"}
+    return bool(getattr(args, "validate_output", False) or env_enabled)
+
+
 def handle_analyze(args: argparse.Namespace) -> None:
     stage_start = time.perf_counter()
     if args.run_id is None and args.csv is None:
@@ -391,6 +404,11 @@ def handle_analyze(args: argparse.Namespace) -> None:
         )
         write_metrics_json(diagnostics_path, diagnostics_payload)
         logger.info("Wrote: %s", diagnostics_path)
+
+    if _should_validate_output(args):
+        validate_output_file(metrics_path, kind="metrics")
+        if args.diagnostics:
+            validate_output_file(diagnostics_path, kind="diagnostics")
 
     logger.info("Wrote: %s", metrics_path)
     logger.info("%s", out_txt.read_text(encoding="utf-8"))

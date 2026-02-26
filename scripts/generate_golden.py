@@ -6,6 +6,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from gan_mg.analysis.thermo import ThermoResult, boltzmann_thermo_from_csv
+from gan_mg.validation import validate_output
 
 STABLE_THERMO_FIELDS = (
     "temperature_K",
@@ -40,6 +41,7 @@ def generate_golden_outputs(
     for csv_path in sorted(input_dir.glob("*.csv")):
         result = boltzmann_thermo_from_csv(csv_path, T=temperature, energy_col="energy_eV")
         stable_result = thermo_result_to_stable_dict(result)
+        validate_output(stable_result, kind="thermo_summary")
 
         output_path = expected_dir / f"{csv_path.stem}.json"
         if output_path.exists() and not overwrite:
