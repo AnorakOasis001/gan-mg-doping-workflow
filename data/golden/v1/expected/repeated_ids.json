@@ -1,0 +1,8 @@
+{
+  "free_energy_mix_eV": -0.30982731151714304,
+  "mixing_energy_avg_eV": -0.10166666666666667,
+  "mixing_energy_min_eV": -0.3,
+  "num_configurations": 6,
+  "partition_function": 1.4624854947608037,
+  "temperature_K": 300.0
+}
