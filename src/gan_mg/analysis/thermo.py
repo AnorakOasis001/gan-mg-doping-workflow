@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import csv
+import logging
 import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
 
+import numpy as np
+from numpy.typing import NDArray
+
 if TYPE_CHECKING:
     import pandas as pd
 
 K_B_EV_PER_K = 8.617333262e-5  # Boltzmann constant in eV/K
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -32,6 +37,35 @@ class ThermoSweepRow(TypedDict):
 
 
 REQUIRED_RESULTS_COLUMNS = ("structure_id", "mechanism", "energy_eV")
+
+
+def log_partition_function(delta_e_eV: NDArray[np.float64], temperature_K: float) -> float:
+    """
+    Compute log(partition function) using a numerically stable log-sum-exp evaluation.
+
+    The partition function is defined for delta energies as:
+        Z = sum_i exp(-delta_e_i / (kB * T))
+    and this function returns log(Z).
+    """
+    if temperature_K <= 0:
+        raise ValueError("temperature_K must be > 0.")
+
+    if delta_e_eV.size == 0:
+        raise ValueError("delta_e_eV must be non-empty.")
+
+    if not np.all(np.isfinite(delta_e_eV)):
+        raise ValueError("delta_e_eV must contain only finite values.")
+
+    x = -delta_e_eV / (K_B_EV_PER_K * temperature_K)
+    m = float(np.max(x))
+    log_z = m + float(np.log(np.sum(np.exp(x - m))))
+    return log_z
+
+
+def free_energy_from_logZ(logZ: float, temperature_K: float) -> float:
+    if temperature_K <= 0:
+        raise ValueError("temperature_K must be > 0.")
+    return -K_B_EV_PER_K * temperature_K * logZ
 
 
 def validate_results_dataframe(df: "pd.DataFrame") -> None:
@@ -112,17 +146,32 @@ def boltzmann_thermo_from_energies(energies: list[float], T: float) -> ThermoRes
     if T <= 0:
         raise ValueError("Temperature T must be > 0.")
 
+    if not energies:
+        raise ValueError("energies must be non-empty.")
+
     beta = 1.0 / (K_B_EV_PER_K * T)
     emin = min(energies)
 
-    shifted = [e - emin for e in energies]
-    weights = [math.exp(-beta * e) for e in shifted]
-    partition_function = sum(weights)
+    delta_e = np.asarray([e - emin for e in energies], dtype=float)
+    log_z = log_partition_function(delta_e_eV=delta_e, temperature_K=T)
 
-    probs = [w / partition_function for w in weights]
-    mixing_energy_avg_eV = sum(p * e for p, e in zip(probs, energies))
+    max_log_float = math.log(float(np.finfo(float).max))
+    if log_z <= max_log_float:
+        partition_function = math.exp(log_z)
+    else:
+        partition_function = float("inf")
+        LOGGER.warning(
+            "Partition function overflow for T=%s K (logZ=%s); storing partition_function=inf.",
+            T,
+            log_z,
+        )
 
-    free_energy_mix_eV = emin - (1.0 / beta) * math.log(partition_function)
+    log_weights = (-beta * delta_e) - log_z
+    probs = np.exp(log_weights)
+    energies_np = np.asarray(energies, dtype=float)
+    mixing_energy_avg_eV = float(np.sum(probs * energies_np))
+
+    free_energy_mix_eV = emin + free_energy_from_logZ(logZ=log_z, temperature_K=T)
 
     return ThermoResult(
         temperature_K=T,
