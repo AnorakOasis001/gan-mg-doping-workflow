@@ -31,6 +31,28 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[docs]" --no-build-isolation
 
+      - name: Debug docs inputs
+        run: |
+          ls -la docs
+          find docs -maxdepth 2 -iname "readme.md" -print
+          python -c "import yaml; print(yaml.safe_load(open('mkdocs.yml'))['docs_dir'] if 'docs_dir' in yaml.safe_load(open('mkdocs.yml')) else 'NO docs_dir')"
+
+      - name: Diagnose/remove README conflict source
+        run: |
+          matches="$(find docs -maxdepth 2 -iname "readme.md" -print)"
+          if [ -n "$matches" ]; then
+            echo "README candidates found under docs/:"
+            printf '%s\n' "$matches"
+            if git ls-files | grep -Eiq '^docs/readme\.md$'; then
+              echo "Tracked docs/README.md detected. Remove it with git rm in source."
+              exit 1
+            fi
+            echo "README is untracked/generated in CI workspace; removing before strict build."
+            find docs -maxdepth 2 -iname "readme.md" -delete
+          else
+            echo "No README.md files found under docs/."
+          fi
+
       - name: Build MkDocs site
         run: mkdocs build --strict
 
