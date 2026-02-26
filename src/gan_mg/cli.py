@@ -690,6 +690,12 @@ def handle_bench(args: argparse.Namespace, bench_parser: argparse.ArgumentParser
 def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser, argparse.ArgumentParser]:
     parser = argparse.ArgumentParser(prog="ganmg")
     parser.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="Run an analysis from a TOML config file.",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable debug logging.",
@@ -722,6 +728,12 @@ def main() -> None:
     parser, runs_parser, bench_parser = build_parser()
     args = parser.parse_args()
     configure_logging(verbose=args.verbose, quiet=args.quiet)
+
+    if args.config is not None:
+        from gan_mg.run_config import run_from_config
+
+        run_from_config(args.config)
+        return
 
     if args.command == "generate":
         handle_generate(args)
