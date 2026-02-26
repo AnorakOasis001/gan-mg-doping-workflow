@@ -180,6 +180,58 @@ def test_cli_profile_outputs_runtime_and_config_count(tmp_path: Path) -> None:
     assert sweep_metrics["timings"]["runtime_s"] > 0
 
 
+def test_metrics_contains_provenance_block(tmp_path: Path) -> None:
+    pytest.importorskip("pandas")
+    run_dir = tmp_path / "runs"
+    run_id = "prov-metrics"
+
+    _run_cli("generate", "--run-dir", str(run_dir), "--run-id", run_id, "--n", "4", "--seed", "13", cwd=tmp_path)
+    _run_cli("analyze", "--run-dir", str(run_dir), "--run-id", run_id, "--T", "500", cwd=tmp_path)
+
+    metrics_path = run_dir / run_id / "outputs" / "metrics.json"
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    provenance = metrics["provenance"]
+
+    assert "provenance" in metrics
+    assert "schema_version" in provenance
+    assert "python_version" in provenance
+    assert "platform" in provenance
+    assert "cli_args" in provenance
+    assert "input_hash" in provenance
+    assert provenance["git_commit"] is None or isinstance(provenance["git_commit"], str)
+
+
+def test_diagnostics_contains_provenance_block(tmp_path: Path) -> None:
+    pytest.importorskip("pandas")
+    run_dir = tmp_path / "runs"
+    run_id = "prov-diagnostics"
+
+    _run_cli("generate", "--run-dir", str(run_dir), "--run-id", run_id, "--n", "4", "--seed", "13", cwd=tmp_path)
+    _run_cli(
+        "analyze",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--T",
+        "500",
+        "--diagnostics",
+        cwd=tmp_path,
+    )
+
+    diagnostics_path = run_dir / run_id / "outputs" / "diagnostics_T500.json"
+    diagnostics = json.loads(diagnostics_path.read_text(encoding="utf-8"))
+    provenance = diagnostics["provenance"]
+
+    assert "provenance" in diagnostics
+    assert "schema_version" in provenance
+    assert "python_version" in provenance
+    assert "platform" in provenance
+    assert "cli_args" in provenance
+    assert "input_hash" in provenance
+    assert provenance["git_commit"] is None or isinstance(provenance["git_commit"], str)
+
+
 def test_cli_runs_show_prints_metadata_and_latest_metrics(tmp_path: Path) -> None:
     pytest.importorskip("pandas")
     run_dir = tmp_path / "runs"
@@ -441,6 +493,7 @@ def test_cli_analyze_writes_optional_diagnostics_json(tmp_path: Path) -> None:
         "logZ_shifted",
         "logZ_absolute",
         "notes",
+        "provenance",
     }
     assert set(diagnostics.keys()) == expected_keys
     assert diagnostics["num_configurations"] == 6

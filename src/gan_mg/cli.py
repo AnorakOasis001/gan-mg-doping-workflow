@@ -7,6 +7,7 @@ import logging
 import math
 import platform
 import random
+import subprocess
 import sys
 import time
 from dataclasses import asdict
@@ -48,6 +49,45 @@ LOG_LEVELS = {
     "verbose": logging.DEBUG,
 }
 logger = logging.getLogger(__name__)
+SCHEMA_VERSION = "1.1"
+
+
+def get_git_commit() -> str | None:
+    """
+    Return current git commit hash if available.
+
+    Return None when git is unavailable, the working directory is not a git repo,
+    or the command fails for any reason.
+    """
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        return None
+
+    if completed.returncode != 0:
+        return None
+
+    commit = completed.stdout.strip()
+    return commit or None
+
+
+def get_runtime_provenance(
+    cli_args: dict[str, Any],
+    input_hash: str | None,
+) -> dict[str, Any]:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "git_commit": get_git_commit(),
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
+        "cli_args": dict(cli_args),
+        "input_hash": input_hash,
+    }
 
 
 def log_profile(stage: str, start_time: float, num_configurations: int) -> None:
@@ -319,6 +359,7 @@ def handle_analyze(args: argparse.Namespace) -> None:
         metrics["reproducibility_hash"] = reproducibility_hash
     if timings:
         metrics["timings"] = timings
+    metrics["provenance"] = get_runtime_provenance(vars(args), reproducibility_hash)
 
     if args.run_id is not None:
         metrics_path = run_dir / "outputs" / "metrics.json"
@@ -343,7 +384,12 @@ def handle_analyze(args: argparse.Namespace) -> None:
                 energy_column=args.energy_col,
                 chunksize=args.chunksize,
             )
-        write_metrics_json(diagnostics_path, asdict(diagnostics))
+        diagnostics_payload = asdict(diagnostics)
+        diagnostics_payload["provenance"] = get_runtime_provenance(
+            vars(args),
+            reproducibility_hash,
+        )
+        write_metrics_json(diagnostics_path, diagnostics_payload)
         logger.info("Wrote: %s", diagnostics_path)
 
     logger.info("Wrote: %s", metrics_path)
