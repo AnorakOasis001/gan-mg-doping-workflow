@@ -497,3 +497,71 @@ def test_cli_analyze_writes_optional_diagnostics_json(tmp_path: Path) -> None:
     }
     assert set(diagnostics.keys()) == expected_keys
     assert diagnostics["num_configurations"] == 6
+
+
+def test_cli_help_lists_common_examples(tmp_path: Path) -> None:
+    completed = _run_cli("--help", cwd=tmp_path)
+
+    assert "Minimal end-to-end run" in completed.stdout
+    assert "ganmg --config configs/run_config.toml" in completed.stdout
+    assert "--validate-output" in completed.stdout
+
+
+def test_cli_analyze_validate_output_flag_succeeds_on_minimal_outputs(tmp_path: Path) -> None:
+    pytest.importorskip("pandas")
+    run_dir = tmp_path / "runs"
+    run_id = "validate-flag"
+
+    _run_cli("generate", "--run-dir", str(run_dir), "--run-id", run_id, "--n", "6", "--seed", "11", cwd=tmp_path)
+    completed = _run_cli(
+        "analyze",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--T",
+        "500",
+        "--validate-output",
+        cwd=tmp_path,
+    )
+
+    assert completed.returncode == 0
+    assert (run_dir / run_id / "outputs" / "metrics.json").exists()
+
+
+def test_cli_analyze_missing_csv_shows_friendly_error(tmp_path: Path) -> None:
+    env = os.environ.copy()
+    src_path = str(REPO_ROOT / "src")
+    env["PYTHONPATH"] = src_path if not env.get("PYTHONPATH") else f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
+
+    missing = tmp_path / "missing.csv"
+    completed = subprocess.run(
+        [sys.executable, "-m", "gan_mg.cli", "analyze", "--csv", str(missing)],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "Input file not found:" in completed.stderr
+
+
+def test_cli_config_missing_file_shows_friendly_error(tmp_path: Path) -> None:
+    env = os.environ.copy()
+    src_path = str(REPO_ROOT / "src")
+    env["PYTHONPATH"] = src_path if not env.get("PYTHONPATH") else f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
+
+    missing = tmp_path / "missing.toml"
+    completed = subprocess.run(
+        [sys.executable, "-m", "gan_mg.cli", "--config", str(missing)],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "Config file not found:" in completed.stderr
