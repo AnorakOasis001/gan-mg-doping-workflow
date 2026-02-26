@@ -406,3 +406,41 @@ def test_cli_bench_thermo_runs_with_small_defaults(tmp_path: Path) -> None:
     assert payload["params"]["nT"] == 4
     assert payload["timings"]["sweep_runtime_s"] >= 0.0
     assert payload["timings"]["time_per_temperature_ms"] >= 0.0
+
+
+def test_cli_analyze_writes_optional_diagnostics_json(tmp_path: Path) -> None:
+    pytest.importorskip("pandas")
+    run_dir = tmp_path / "runs"
+    run_id = "diag-run"
+
+    _run_cli("generate", "--run-dir", str(run_dir), "--run-id", run_id, "--n", "6", "--seed", "11", cwd=tmp_path)
+    _run_cli(
+        "analyze",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--T",
+        "750",
+        "--diagnostics",
+        cwd=tmp_path,
+    )
+
+    diagnostics_path = run_dir / run_id / "outputs" / "diagnostics_T750.json"
+    assert diagnostics_path.exists()
+
+    diagnostics = json.loads(diagnostics_path.read_text(encoding="utf-8"))
+    expected_keys = {
+        "temperature_K",
+        "num_configurations",
+        "expected_energy_eV",
+        "energy_variance_eV2",
+        "energy_std_eV",
+        "p_min",
+        "effective_sample_size",
+        "logZ_shifted",
+        "logZ_absolute",
+        "notes",
+    }
+    assert set(diagnostics.keys()) == expected_keys
+    assert diagnostics["num_configurations"] == 6
