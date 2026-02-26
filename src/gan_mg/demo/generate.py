@@ -5,11 +5,10 @@ import random
 from pathlib import Path
 
 from gan_mg.models import (
-    DemoModel,
+    DemoEnergyModel,
     EnergyModel,
-    MACEBackend,
     StructureConfig,
-    ToyPairPotentialModel,
+    ToyPairEnergyModel,
 )
 
 
@@ -27,11 +26,9 @@ def build_demo_configs(n: int, seed: int) -> list[StructureConfig]:
 
 def resolve_model(model_name: str, seed: int) -> EnergyModel:
     if model_name == "demo":
-        return DemoModel(seed=seed)
+        return DemoEnergyModel(seed=seed)
     if model_name == "toy":
-        return ToyPairPotentialModel()
-    if model_name == "mace":
-        return MACEBackend()
+        return ToyPairEnergyModel()
     raise ValueError(f"unsupported model: {model_name}")
 
 
