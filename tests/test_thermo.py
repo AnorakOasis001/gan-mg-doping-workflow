@@ -1,12 +1,17 @@
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
 
 from gan_mg.analysis.thermo import (
     K_B_EV_PER_K,
+    LogSumExpAccumulator,
+    RunningStats,
     boltzmann_thermo_from_energies,
+    boltzmann_thermo_from_csv,
     log_partition_function,
+    thermo_from_csv_streaming,
     validate_results_dataframe,
 )
 
@@ -102,6 +107,84 @@ def test_no_underflow_overflow_wide_energy_range() -> None:
 
     assert math.isfinite(log_z)
     assert not math.isnan(log_z)
+
+
+def test_streaming_matches_in_memory_for_large_csv(tmp_path: Path) -> None:
+    pd = pytest.importorskip("pandas")
+    n_rows = 50_000
+    energies = np.linspace(-2.5, -1.0, n_rows, dtype=float)
+    csv_path = tmp_path / "large_results.csv"
+    pd.DataFrame(
+        {
+            "structure_id": [f"s_{idx}" for idx in range(n_rows)],
+            "mechanism": ["MgGa+VN"] * n_rows,
+            "energy_eV": energies,
+        }
+    ).to_csv(csv_path, index=False)
+
+    temperature = 900.0
+    in_memory = boltzmann_thermo_from_csv(csv_path, T=temperature, energy_col="energy_eV")
+    streaming = thermo_from_csv_streaming(
+        csv_path=csv_path,
+        temperature_K=temperature,
+        energy_column="energy_eV",
+        chunksize=5000,
+    )
+
+    assert streaming.num_configurations == in_memory.num_configurations
+    assert streaming.mixing_energy_min_eV == in_memory.mixing_energy_min_eV
+    assert streaming.mixing_energy_avg_eV == pytest.approx(in_memory.mixing_energy_avg_eV, rel=1e-12, abs=1e-12)
+    assert streaming.free_energy_mix_eV == pytest.approx(in_memory.free_energy_mix_eV, rel=1e-12, abs=1e-12)
+    if math.isinf(streaming.partition_function) and math.isinf(in_memory.partition_function):
+        assert True
+    else:
+        assert streaming.partition_function == pytest.approx(in_memory.partition_function, rel=1e-12, abs=1e-12)
+
+
+def test_streaming_invalid_inputs(tmp_path: Path) -> None:
+    pd = pytest.importorskip("pandas")
+    csv_path = tmp_path / "results.csv"
+    pd.DataFrame(
+        {
+            "structure_id": ["demo_1", "demo_2"],
+            "mechanism": ["MgGa+VN", "MgGa+VN"],
+            "energy_eV": [-1.0, -0.9],
+        }
+    ).to_csv(csv_path, index=False)
+
+    with pytest.raises(ValueError, match="missing required column"):
+        thermo_from_csv_streaming(csv_path, temperature_K=600.0, energy_column="missing", chunksize=10)
+
+    with pytest.raises(ValueError, match="temperature_K must be > 0"):
+        thermo_from_csv_streaming(csv_path, temperature_K=0.0, energy_column="energy_eV", chunksize=10)
+
+    with pytest.raises(ValueError, match="chunksize must be > 0"):
+        thermo_from_csv_streaming(csv_path, temperature_K=600.0, energy_column="energy_eV", chunksize=0)
+
+    bad_csv = tmp_path / "bad.csv"
+    pd.DataFrame(
+        {
+            "structure_id": ["demo_1", "demo_2"],
+            "mechanism": ["MgGa+VN", "MgGa+VN"],
+            "energy_eV": [-1.0, float("nan")],
+        }
+    ).to_csv(bad_csv, index=False)
+    with pytest.raises(ValueError, match="must contain only finite values"):
+        thermo_from_csv_streaming(bad_csv, temperature_K=600.0, energy_column="energy_eV", chunksize=10)
+
+
+def test_running_stats_and_logsumexp_require_data() -> None:
+    stats = RunningStats()
+    lse = LogSumExpAccumulator()
+
+    with pytest.raises(ValueError, match="undefined"):
+        _ = stats.count
+    with pytest.raises(ValueError, match="undefined"):
+        _ = stats.mean
+    with pytest.raises(ValueError, match="undefined"):
+        _ = stats.min
+    with pytest.raises(ValueError, match="No values"):
+        lse.logsumexp()
 
 
 @pytest.mark.parametrize(

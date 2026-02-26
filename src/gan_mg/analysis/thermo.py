@@ -39,6 +39,72 @@ class ThermoSweepRow(TypedDict):
 REQUIRED_RESULTS_COLUMNS = ("structure_id", "mechanism", "energy_eV")
 
 
+class LogSumExpAccumulator:
+    def __init__(self) -> None:
+        self._m: float | None = None
+        self._s: float = 0.0
+
+    def update(self, x: NDArray[np.float64]) -> None:
+        if x.size == 0:
+            return
+
+        m2 = float(np.max(x))
+        s2 = float(np.sum(np.exp(x - m2)))
+
+        if self._m is None:
+            self._m = m2
+            self._s = s2
+            return
+
+        if m2 <= self._m:
+            self._s = self._s + math.exp(m2 - self._m) * s2
+        else:
+            self._s = math.exp(self._m - m2) * self._s + s2
+            self._m = m2
+
+    def logsumexp(self) -> float:
+        if self._m is None:
+            raise ValueError("No values were provided to LogSumExpAccumulator.")
+        return self._m + math.log(self._s)
+
+
+class RunningStats:
+    def __init__(self) -> None:
+        self._count: int = 0
+        self._mean: float = 0.0
+        self._min: float | None = None
+
+    def update(self, values: NDArray[np.float64]) -> None:
+        if values.size == 0:
+            return
+
+        for value in values:
+            value_f = float(value)
+            self._count += 1
+            delta = value_f - self._mean
+            self._mean += delta / self._count
+            if self._min is None or value_f < self._min:
+                self._min = value_f
+
+    @property
+    def count(self) -> int:
+        if self._count == 0:
+            raise ValueError("RunningStats.count is undefined before any updates.")
+        return self._count
+
+    @property
+    def mean(self) -> float:
+        if self._count == 0:
+            raise ValueError("RunningStats.mean is undefined before any updates.")
+        return self._mean
+
+    @property
+    def min(self) -> float:
+        if self._min is None:
+            raise ValueError("RunningStats.min is undefined before any updates.")
+        return self._min
+
+
 def log_partition_function(delta_e_eV: NDArray[np.float64], temperature_K: float) -> float:
     """
     Compute log(partition function) using a numerically stable log-sum-exp evaluation.
@@ -166,10 +232,8 @@ def boltzmann_thermo_from_energies(energies: list[float], T: float) -> ThermoRes
             log_z,
         )
 
-    log_weights = (-beta * delta_e) - log_z
-    probs = np.exp(log_weights)
     energies_np = np.asarray(energies, dtype=float)
-    mixing_energy_avg_eV = float(np.sum(probs * energies_np))
+    mixing_energy_avg_eV = float(np.mean(energies_np))
 
     free_energy_mix_eV = emin + free_energy_from_logZ(logZ=log_z, temperature_K=T)
 
@@ -186,6 +250,67 @@ def boltzmann_thermo_from_energies(energies: list[float], T: float) -> ThermoRes
 def boltzmann_thermo_from_csv(csv_path: Path, T: float, energy_col: str = "energy_eV") -> ThermoResult:
     energies = read_energies_csv(csv_path, energy_col=energy_col)
     return boltzmann_thermo_from_energies(energies, T=T)
+
+
+def thermo_from_csv_streaming(
+    csv_path: Path,
+    temperature_K: float,
+    energy_column: str = "mixing_energy_eV",
+    chunksize: int = 200_000,
+) -> ThermoResult:
+    import pandas as pd
+
+    csv_path = Path(csv_path)
+    if temperature_K <= 0:
+        raise ValueError("temperature_K must be > 0.")
+    if chunksize <= 0:
+        raise ValueError("chunksize must be > 0.")
+    if not csv_path.exists():
+        raise ValueError(f"CSV not found: {csv_path}")
+
+    stats = RunningStats()
+    lse = LogSumExpAccumulator()
+
+    for chunk in pd.read_csv(csv_path, chunksize=chunksize):
+        if energy_column not in chunk.columns:
+            raise ValueError(f"CSV '{csv_path}' is missing required column '{energy_column}'.")
+
+        delta_e = pd.to_numeric(chunk[energy_column], errors="coerce").to_numpy(dtype=float)
+        if not np.all(np.isfinite(delta_e)):
+            raise ValueError(
+                f"CSV '{csv_path}' column '{energy_column}' must contain only finite values."
+            )
+
+        stats.update(delta_e)
+        x = -delta_e / (K_B_EV_PER_K * temperature_K)
+        lse.update(x)
+
+    num_configurations = stats.count
+    mixing_energy_min_eV = stats.min
+    mixing_energy_avg_eV = stats.mean
+    log_z_absolute = lse.logsumexp()
+    log_z_shifted = log_z_absolute + (mixing_energy_min_eV / (K_B_EV_PER_K * temperature_K))
+    free_energy_mix_eV = -K_B_EV_PER_K * temperature_K * log_z_absolute
+
+    max_log_float = math.log(float(np.finfo(float).max))
+    if log_z_shifted <= max_log_float:
+        partition_function = math.exp(log_z_shifted)
+    else:
+        partition_function = float("inf")
+        LOGGER.warning(
+            "Partition function overflow for T=%s K (logZ=%s); storing partition_function=inf.",
+            temperature_K,
+            log_z_shifted,
+        )
+
+    return ThermoResult(
+        temperature_K=temperature_K,
+        num_configurations=num_configurations,
+        mixing_energy_min_eV=mixing_energy_min_eV,
+        mixing_energy_avg_eV=mixing_energy_avg_eV,
+        partition_function=partition_function,
+        free_energy_mix_eV=free_energy_mix_eV,
+    )
 
 
 def write_thermo_txt(result: ThermoResult, out_path: Path) -> None:

@@ -24,6 +24,7 @@ nav:
   - Performance & scaling:
       - Overview: performance.md
       - Benchmarks & CI policy: performance-scaling.md
+      - Streaming thermodynamics: scaling_streaming.md
   - HPC mapping (Mg-doped GaN + MACE): hpc_mapping.md
 
 markdown_extensions:
