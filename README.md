@@ -106,6 +106,41 @@ If matplotlib is not installed, omit `--plot`.
 
 ---
 
+## Reproducibility & Regression Testing
+
+### Deterministic Golden Fixtures
+
+Small canonical CSV inputs used for regression checks are stored in:
+
+* `data/golden/v1/inputs/`
+
+Corresponding frozen expected outputs are stored in:
+
+* `data/golden/v1/expected/`
+
+These expected output JSON files are committed to the repository and versioned alongside code changes. They intentionally include only stable thermodynamic fields and exclude volatile metadata such as timestamps or provenance.
+
+### Golden Regression Tests
+
+The regression suite verifies that current thermodynamic outputs match the frozen expected values. A failing comparison is treated as behavioral drift and requires investigation before merge.
+
+Tests are implemented with `pytest`, and CI enforces these checks on every pull request.
+
+### Streaming vs In-Memory Validation
+
+The streaming thermodynamics path is validated against the in-memory implementation. Tests guarantee numerical equivalence between both paths within strict floating-point tolerances.
+
+This parity check is important for large-scale datasets, where streaming execution improves memory behavior while preserving scientific correctness.
+
+### How to Regenerate Golden Outputs (Developer Workflow)
+
+```bash
+python scripts/generate_golden.py --overwrite
+pytest -q
+```
+
+---
+
 ## Models
 
 Generation now supports pluggable energy backends via `--model`:
