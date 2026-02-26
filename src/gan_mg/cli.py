@@ -19,6 +19,7 @@ from gan_mg.analysis.thermo import (
     boltzmann_thermo_from_csv,
     plot_thermo_vs_T,
     sweep_thermo_from_csv,
+    thermo_from_csv_streaming,
     write_thermo_txt,
     write_thermo_vs_T_csv,
 )
@@ -124,6 +125,12 @@ def build_analyze_parser(subparsers: argparse._SubParsersAction[argparse.Argumen
     )
     parser.add_argument("--T", type=float, default=1000.0, help="Temperature in K.")
     parser.add_argument("--energy-col", default="energy_eV", help="Energy column name.")
+    parser.add_argument(
+        "--chunksize",
+        type=int,
+        default=None,
+        help="Optional CSV chunk size for streaming analysis.",
+    )
     return parser
 
 
@@ -266,7 +273,15 @@ def handle_analyze(args: argparse.Namespace) -> None:
         out_txt = Path("results") / "tables" / "demo_thermo.txt"
 
     try:
-        result = boltzmann_thermo_from_csv(csv_path, T=args.T, energy_col=args.energy_col)
+        if args.chunksize is None:
+            result = boltzmann_thermo_from_csv(csv_path, T=args.T, energy_col=args.energy_col)
+        else:
+            result = thermo_from_csv_streaming(
+                csv_path=csv_path,
+                temperature_K=args.T,
+                energy_column=args.energy_col,
+                chunksize=args.chunksize,
+            )
     except ValueError as e:
         raise SystemExit(f"Input validation error: {e}") from e
 
