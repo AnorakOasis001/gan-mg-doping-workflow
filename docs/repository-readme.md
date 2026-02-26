@@ -2,6 +2,8 @@
 
 This page mirrors the quick Python API snippet for users browsing the documentation site.
 
+Version is exposed at runtime as `gan_mg.__version__`.
+
 ```python
 from pathlib import Path
 
