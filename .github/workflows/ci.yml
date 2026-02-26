@@ -126,3 +126,30 @@ jobs:
           path: |
             dist/*.whl
             dist/*.tar.gz
+
+  benchmarks-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . --no-build-isolation
+
+      - name: Run benchmark smoke
+        run: |
+          python scripts/benchmark_thermo.py --rows 1000 5000 --outdir results/benchmarks_ci --chunksize 500
+
+      - name: Upload benchmark summary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmarks-smoke-summary
+          path: results/benchmarks_ci/thermo_benchmarks.jsonl
