@@ -74,7 +74,7 @@ def assert_dict_close(
             assert math.isfinite(float(actual_value)), (
                 f"{context}: field '{field}' actual non-finite value {actual_value}"
             )
-            assert math.isclose(float(actual_value), float(expected_value), rtol=rtol, atol=atol), (
+            assert math.isclose(float(actual_value), float(expected_value), rel_tol=rtol, abs_tol=atol), (
                 f"{context}: field '{field}' mismatch; expected {expected_value}, got {actual_value} "
                 f"(rtol={rtol}, atol={atol})"
             )
