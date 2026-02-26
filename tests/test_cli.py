@@ -60,6 +60,7 @@ def test_cli_generate_analyze_sweep_end_to_end(tmp_path: Path, model: str) -> No
     assert isinstance(analyze_metrics["partition_function"], float)
     assert isinstance(analyze_metrics["free_energy_mix_eV"], float)
     assert isinstance(analyze_metrics["reproducibility_hash"], str)
+    assert isinstance(analyze_metrics["created_at"], str)
 
     _run_cli("sweep", "--run-dir", str(run_dir), "--run-id", run_id, "--nT", "7", cwd=tmp_path)
 
@@ -69,18 +70,13 @@ def test_cli_generate_analyze_sweep_end_to_end(tmp_path: Path, model: str) -> No
     sweep_csv = run_path / "outputs" / "thermo_vs_T.csv"
     assert sweep_csv.exists()
 
-    sweep_metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    sweep_metrics_path = run_path / "outputs" / "metrics_sweep.json"
+    assert sweep_metrics_path.exists()
+    sweep_metrics = json.loads(sweep_metrics_path.read_text(encoding="utf-8"))
     assert len(sweep_metrics["temperature_grid_K"]) == 7
-    assert sweep_metrics["num_configurations"] == 6
-    for key in (
-        "mixing_energy_min_eV",
-        "mixing_energy_avg_eV",
-        "partition_function",
-        "free_energy_mix_eV",
-    ):
-        assert isinstance(sweep_metrics[key], list)
-        assert len(sweep_metrics[key]) == 7
+    assert sweep_metrics["num_temperatures"] == 7
     assert isinstance(sweep_metrics["reproducibility_hash"], str)
+    assert isinstance(sweep_metrics["created_at"], str)
 
     with sweep_csv.open("r", encoding="utf-8", newline="") as f:
         rows = list(csv.DictReader(f))
@@ -179,7 +175,7 @@ def test_cli_profile_outputs_runtime_and_config_count(tmp_path: Path) -> None:
     )
     assert "[profile] sweep runtime_s=" in sweep.stdout
     assert "num_configurations=6" in sweep.stdout
-    sweep_metrics = json.loads((run_dir / run_id / "outputs" / "metrics.json").read_text(encoding="utf-8"))
+    sweep_metrics = json.loads((run_dir / run_id / "outputs" / "metrics_sweep.json").read_text(encoding="utf-8"))
     assert "timings" in sweep_metrics
     assert sweep_metrics["timings"]["runtime_s"] > 0
 
@@ -191,13 +187,17 @@ def test_cli_runs_show_prints_metadata_and_latest_metrics(tmp_path: Path) -> Non
 
     _run_cli("generate", "--run-dir", str(run_dir), "--run-id", run_id, "--n", "4", "--seed", "13", cwd=tmp_path)
     _run_cli("analyze", "--run-dir", str(run_dir), "--run-id", run_id, "--T", "500", cwd=tmp_path)
+    _run_cli("sweep", "--run-dir", str(run_dir), "--run-id", run_id, "--nT", "4", cwd=tmp_path)
 
     shown = _run_cli("runs", "--run-dir", str(run_dir), "show", "--run-id", run_id, cwd=tmp_path)
 
     assert f"run_id            : {run_id}" in shown.stdout
     assert "latest_metrics    :" in shown.stdout
+    assert "metrics.json      :" in shown.stdout
+    assert "metrics_sweep.json:" in shown.stdout
     assert '"temperature_K": 500.0' in shown.stdout
     assert '"reproducibility_hash":' in shown.stdout
+    assert '"temperature_grid_K": [' in shown.stdout
 
 
 def test_cli_verbose_and_quiet_flags_conflict(tmp_path: Path) -> None:
