@@ -5,6 +5,7 @@ build-backend = "setuptools.build_meta"
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-cov>=5", "mypy>=1.11", "pandas-stubs>=2.2"]
 plot = ["matplotlib>=3.8"]
+# Optional documentation toolchain (MkDocs + Material theme + pymdownx extensions).
 docs = ["mkdocs>=1.6", "mkdocs-material>=9.5", "pymdown-extensions>=10.0"]
 
 [project]
