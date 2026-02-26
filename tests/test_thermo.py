@@ -1,10 +1,12 @@
 import math
 
+import numpy as np
 import pytest
 
 from gan_mg.analysis.thermo import (
     K_B_EV_PER_K,
     boltzmann_thermo_from_energies,
+    log_partition_function,
     validate_results_dataframe,
 )
 
@@ -79,3 +81,39 @@ def test_validate_results_dataframe_nan_values() -> None:
 
     with pytest.raises(ValueError, match="NaN values"):
         validate_results_dataframe(df)
+
+
+def test_logsumexp_matches_naive_in_safe_regime() -> None:
+    temperature = 600.0
+    delta_e = np.array([0.0, 0.01, 0.03, 0.07], dtype=float)
+
+    stable_log_z = log_partition_function(delta_e_eV=delta_e, temperature_K=temperature)
+    x = -delta_e / (K_B_EV_PER_K * temperature)
+    naive_log_z = float(np.log(np.sum(np.exp(x))))
+
+    assert stable_log_z == pytest.approx(naive_log_z, rel=1e-12, abs=1e-12)
+
+
+def test_no_underflow_overflow_wide_energy_range() -> None:
+    temperature = 50.0
+    delta_e = np.linspace(0.0, 5.0, 100, dtype=float)
+
+    log_z = log_partition_function(delta_e_eV=delta_e, temperature_K=temperature)
+
+    assert math.isfinite(log_z)
+    assert not math.isnan(log_z)
+
+
+@pytest.mark.parametrize(
+    ("delta_e", "temperature", "message"),
+    [
+        (np.array([0.0, 0.2], dtype=float), 0.0, "temperature_K must be > 0"),
+        (np.array([0.0, 0.2], dtype=float), -10.0, "temperature_K must be > 0"),
+        (np.array([], dtype=float), 300.0, "non-empty"),
+        (np.array([0.0, np.nan], dtype=float), 300.0, "finite"),
+        (np.array([0.0, np.inf], dtype=float), 300.0, "finite"),
+    ],
+)
+def test_invalid_inputs(delta_e: np.ndarray, temperature: float, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        log_partition_function(delta_e_eV=delta_e, temperature_K=temperature)

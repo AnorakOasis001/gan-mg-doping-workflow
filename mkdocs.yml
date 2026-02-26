@@ -19,6 +19,7 @@ nav:
   - API usage: api-usage.md
   - Repository README: repository-readme.md
   - Thermodynamics math: thermodynamics-math.md
+  - Numerical stability: numerical_stability.md
   - Reproducibility philosophy: reproducibility-philosophy.md
   - Performance & scaling:
       - Overview: performance.md
