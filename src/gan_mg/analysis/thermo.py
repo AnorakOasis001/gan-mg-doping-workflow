@@ -477,7 +477,7 @@ def diagnostics_from_csv_streaming(
 def thermo_from_csv_streaming(
     csv_path: Path,
     temperature_K: float,
-    energy_column: str = "mixing_energy_eV",
+    energy_column: str = "energy_eV",
     chunksize: int = 200_000,
 ) -> ThermoResult:
     import pandas as pd
