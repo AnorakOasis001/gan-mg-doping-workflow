@@ -143,6 +143,22 @@ def test_streaming_matches_in_memory_for_large_csv(tmp_path: Path) -> None:
         assert streaming.partition_function == pytest.approx(in_memory.partition_function, rel=1e-12, abs=1e-12)
 
 
+def test_streaming_default_energy_column_is_energy_ev(tmp_path: Path) -> None:
+    pd = pytest.importorskip("pandas")
+    csv_path = tmp_path / "results.csv"
+    pd.DataFrame(
+        {
+            "structure_id": ["demo_1", "demo_2"],
+            "mechanism": ["MgGa+VN", "MgGa+VN"],
+            "energy_eV": [-1.0, -0.9],
+        }
+    ).to_csv(csv_path, index=False)
+
+    result = thermo_from_csv_streaming(csv_path, temperature_K=600.0, chunksize=1)
+
+    assert result.num_configurations == 2
+
+
 def test_streaming_invalid_inputs(tmp_path: Path) -> None:
     pd = pytest.importorskip("pandas")
     csv_path = tmp_path / "results.csv"

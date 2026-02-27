@@ -39,6 +39,8 @@ gan-mg analyze --chunksize 200000
 
 You can combine it with existing options such as `--csv`, `--T`, and `--energy-col`.
 
+By default, analysis reads the `energy_eV` column. If your CSV uses a different column name (for example legacy `mixing_energy_eV`), pass it explicitly with `--energy-col mixing_energy_eV`.
+
 ## Result equivalence
 
 Streaming and in-memory analysis are mathematically identical for the same inputs. The difference is only in I/O and numerical evaluation pathway (chunked vs whole-array loading).
