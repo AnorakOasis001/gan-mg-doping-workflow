@@ -30,6 +30,7 @@ from gan_mg.demo.generate import generate_demo_csv
 from gan_mg.analysis.figures import regenerate_thermo_figure
 from gan_mg.analysis.crossover import derive_mechanism_crossover_dataset
 from gan_mg.analysis.crossover_uncertainty import derive_crossover_uncertainty_dataset
+from gan_mg.analysis.phase_boundary import derive_phase_boundary_dataset
 from gan_mg.analysis.phase_map import derive_phase_map_dataset
 from gan_mg.import_results import import_results_to_run
 from gan_mg.science.mixing import derive_mixing_dataset
@@ -413,6 +414,11 @@ def build_phase_map_parser(subparsers: argparse._SubParsersAction[argparse.Argum
         "--plot",
         action="store_true",
         help="Write phase map PNG (requires optional dependency: gan-mg-doping-workflow[plot]).",
+    )
+    parser.add_argument(
+        "--boundary",
+        action="store_true",
+        help="Derive phase-boundary dataset and optionally overlay it when plotting.",
     )
     return parser
 
@@ -1044,6 +1050,14 @@ def handle_phase_map(args: argparse.Namespace) -> None:
 
     logger.info("Wrote: %s", phase_map_csv)
 
+    phase_boundary_csv: Path | None = None
+    if args.boundary:
+        try:
+            phase_boundary_csv = derive_phase_boundary_dataset(run_dir)
+        except (ValueError, FileNotFoundError) as e:
+            raise SystemExit(f"Phase-boundary error: {e}") from e
+        logger.info("Wrote: %s", phase_boundary_csv)
+
     if not args.plot:
         return
 
@@ -1058,7 +1072,7 @@ def handle_phase_map(args: argparse.Namespace) -> None:
         ) from e
 
     out_png = run_dir / "figures" / "phase_map.png"
-    plot_phase_map(phase_map_csv, out_png)
+    plot_phase_map(phase_map_csv, out_png, boundary_csv=phase_boundary_csv)
     logger.info("Wrote: %s", out_png)
 
 

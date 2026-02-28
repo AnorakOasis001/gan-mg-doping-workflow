@@ -326,6 +326,25 @@ def test_cli_phase_map_plot_writes_png(tmp_path: Path) -> None:
     assert (run_dir / run_id / "figures" / "phase_map.png").exists()
 
 
+
+
+def test_cli_phase_map_boundary_writes_dataset(tmp_path: Path) -> None:
+    run_dir = tmp_path / "runs"
+    run_id = "phase-map-boundary"
+    input_csv = run_dir / run_id / "derived" / "crossover_uncertainty.csv"
+    input_csv.parent.mkdir(parents=True, exist_ok=True)
+    input_csv.write_text(
+        "x_mg_cation,doping_level_percent,T_K,delta_G_mean_eV,delta_G_ci_low_eV,delta_G_ci_high_eV,preferred,robust\n"
+        "0.10,10.0,300.0,0.04,-0.01,0.09,mgi,True\n"
+        "0.20,20.0,300.0,0.10,0.05,0.15,vn,True\n",
+        encoding="utf-8",
+    )
+
+    _run_cli("phase-map", "--run-dir", str(run_dir), "--run-id", run_id, "--boundary", cwd=tmp_path)
+
+    assert (run_dir / run_id / "derived" / "phase_boundary.csv").exists()
+
+
 def test_cli_import_csv_into_existing_run_writes_metadata(tmp_path: Path) -> None:
     pytest.importorskip("pandas")
 
