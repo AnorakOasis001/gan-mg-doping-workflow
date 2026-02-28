@@ -23,6 +23,7 @@ nav:
   - Numerical stability: numerical_stability.md
   - Ensemble diagnostics: ensemble_diagnostics.md
   - Output contract validation: output-contract-validation.md
+  - Output contracts: output-contracts.md
   - Workflows:
       - Minimal end-to-end: workflows/minimal_end_to_end.md
   - Reproducibility philosophy: reproducibility-philosophy.md

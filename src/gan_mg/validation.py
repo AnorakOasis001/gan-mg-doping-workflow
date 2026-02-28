@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import csv
 import json
 import math
 import re
 from pathlib import Path
 from typing import Any, Callable
+
+from gan_mg.contracts import CsvContract, JsonContract
 
 
 class ValidationError(ValueError):
@@ -198,3 +201,27 @@ def validate_output_file(path: Path, *, kind: str | None = None) -> None:
     if not isinstance(payload, dict):
         raise ValidationError("root", f"expected top-level object, got {type(payload).__name__}")
     validate_output(payload, kind=kind or detect_kind_from_filename(file_path))
+
+
+def validate_csv_contract(path: Path, contract: CsvContract) -> None:
+    file_path = Path(path)
+    with file_path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None:
+            raise ValidationError("root", f"{contract.name}: CSV is missing a header row")
+
+        columns = set(reader.fieldnames)
+        for required in contract.required_columns:
+            if required not in columns:
+                raise ValidationError("root", f"{contract.name}: missing required column '{required}'")
+
+
+def validate_json_contract(path: Path, contract: JsonContract) -> None:
+    file_path = Path(path)
+    payload = json.loads(file_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValidationError("root", f"{contract.name}: expected top-level object, got {type(payload).__name__}")
+
+    for required in contract.required_keys:
+        if required not in payload:
+            raise ValidationError("root", f"{contract.name}: missing required key '{required}'")
