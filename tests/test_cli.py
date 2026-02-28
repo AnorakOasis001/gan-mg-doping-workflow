@@ -565,3 +565,66 @@ def test_cli_config_missing_file_shows_friendly_error(tmp_path: Path) -> None:
 
     assert completed.returncode != 0
     assert "Config file not found:" in completed.stderr
+
+
+def test_cli_repropack_exports_run_artifacts_and_zip(tmp_path: Path) -> None:
+    run_dir = tmp_path / "runs"
+    run_id = "repropack"
+    run_path = run_dir / run_id
+
+    (run_path / "inputs").mkdir(parents=True, exist_ok=True)
+    (run_path / "derived").mkdir(parents=True, exist_ok=True)
+    (run_path / "figures").mkdir(parents=True, exist_ok=True)
+
+    (run_path / "inputs" / "results.csv").write_text("structure_id,energy_eV\ns1,-1.0\n", encoding="utf-8")
+    (run_path / "inputs" / "reference.toml").write_text('model = "gan_mg3n2"\n', encoding="utf-8")
+    (run_path / "derived" / "per_structure.csv").write_text("structure_id\ns1\n", encoding="utf-8")
+    (run_path / "derived" / "gibbs_summary.csv").write_text("mechanism_code\nvn\n", encoding="utf-8")
+    (run_path / "figures" / "overlay.png").write_bytes(b"png")
+    (run_path / "derived" / "repro_manifest.json").write_text('{"git_commit":"abc123"}', encoding="utf-8")
+
+    out_dir = tmp_path / "exports"
+    _run_cli(
+        "repropack",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--out",
+        str(out_dir),
+        "--zip",
+        cwd=tmp_path,
+    )
+
+    packed = out_dir / run_id
+    assert (packed / "inputs" / "results.csv").exists()
+    assert (packed / "inputs" / "reference.toml").exists()
+    assert (packed / "derived" / "per_structure.csv").exists()
+    assert (packed / "figures" / "overlay.png").exists()
+    assert (packed / "index.md").exists()
+    assert "abc123" in (packed / "index.md").read_text(encoding="utf-8")
+
+    assert (out_dir / f"{run_id}.zip").exists()
+
+
+def test_cli_repropack_requires_core_inputs(tmp_path: Path) -> None:
+    run_dir = tmp_path / "runs"
+    run_id = "missing-core"
+    run_path = run_dir / run_id
+    (run_path / "inputs").mkdir(parents=True, exist_ok=True)
+
+    env = os.environ.copy()
+    src_path = str(REPO_ROOT / "src")
+    env["PYTHONPATH"] = src_path if not env.get("PYTHONPATH") else f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
+
+    completed = subprocess.run(
+        [sys.executable, "-m", "gan_mg.cli", "repropack", "--run-dir", str(run_dir), "--run-id", run_id],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "Core input missing" in (completed.stderr + completed.stdout)

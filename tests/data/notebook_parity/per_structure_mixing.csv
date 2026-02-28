@@ -1,0 +1,5 @@
+structure_id,mechanism_code,mechanism_label,energy_total_eV,energy_reference_eV,energy_mixing_eV,energy_mixing_eV_per_atom,energy_mixing_eV_per_cation,dE_eV,dE_eV_per_atom,dE_eV_per_cation,mg_count,ga_count,n_count,site_count_total,x_mg_cation,doping_level_percent,n_mismatch,relaxed_structure_ref
+vn-25-a,vn,vn,-1.2,0.0,-1.2,-0.1,-0.2,0.0,0.0,0.0,2,4,6,12,0.25,25.0,0.0,
+vn-25-b,vn,vn,-1.1,0.0,-1.1,-0.0916666666667,-0.1833333333333,0.1,0.0083333333333,0.0166666666667,2,4,6,12,0.25,25.0,0.0,
+mgi-25-a,mgi,mgi,-1.15,0.0,-1.15,-0.0958333333333,-0.1916666666667,0.0,0.0,0.0,2,4,6,12,0.25,25.0,0.0,
+mgi-25-b,mgi,mgi,-1.05,0.0,-1.05,-0.0875,-0.175,0.1,0.0083333333333,0.0166666666667,2,4,6,12,0.25,25.0,0.0,
