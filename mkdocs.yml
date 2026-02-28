@@ -16,6 +16,7 @@ nav:
   - Installation: installation.md
   - CLI usage: cli-usage.md
   - Gallery: gallery.md
+  - Results demo: results_demo.md
   - API usage: api-usage.md
   - Repository README: repository-readme.md
   - Thermodynamics math: thermodynamics-math.md

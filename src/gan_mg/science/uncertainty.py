@@ -30,9 +30,6 @@ UNCERTAINTY_COLUMNS = (
 
 
 def _stable_logsumexp(x: np.ndarray) -> float:
-    m = float(np.max(x))
-    return m + float(np.log(np.sum(np.exp(x - m))))
-
 
 def compute_weights(dE: np.ndarray, T: float, kB: float, top_k: int = 5) -> tuple[np.ndarray, float, float, float]:
     if dE.size == 0:
