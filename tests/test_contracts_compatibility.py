@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 from pathlib import Path
 
@@ -13,6 +14,22 @@ from gan_mg.contracts import (
     all_json_contracts,
 )
 from gan_mg.validation import validate_csv_contract, validate_json_contract
+
+
+
+INVALID_FILENAME_CHARS = '<>:"/\\|?*'
+
+
+def _safe_filename(name: str) -> str:
+    out = name
+    for char in INVALID_FILENAME_CHARS:
+        out = out.replace(char, "_")
+    return out
+
+
+def _contract_json_fixture_path(tmp_path: Path, contract_name: str) -> Path:
+    suffix = hashlib.sha256(contract_name.encode("utf-8")).hexdigest()[:8]
+    return tmp_path / f"{_safe_filename(contract_name)}_{suffix}.json"
 
 
 def _csv_fixture_for_contract(contract: CsvContract, tmp_path: Path) -> Path:
@@ -80,7 +97,7 @@ _MINIMAL_JSON_BY_CONTRACT: dict[str, dict[str, object]] = {
 def test_json_contracts_accept_required_and_extra_keys(contract: JsonContract, tmp_path: Path) -> None:
     payload = dict(_MINIMAL_JSON_BY_CONTRACT[contract.name])
 
-    json_path = tmp_path / contract.name.replace("/", "_").replace("<", "").replace(">", "")
+    json_path = _contract_json_fixture_path(tmp_path, contract.name)
     json_path.parent.mkdir(parents=True, exist_ok=True)
     json_path.write_text(json.dumps(payload), encoding="utf-8")
     validate_json_contract(json_path, contract)
