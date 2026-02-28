@@ -1,0 +1,14 @@
+{
+  "dataset": "mechanism_crossover.csv",
+  "description": "Mechanism crossover dataset comparing vn and mgi Gibbs mixing free energies.",
+  "required_columns": [
+    {"name": "x_mg_cation", "type": "float", "units": "fraction"},
+    {"name": "doping_level_percent", "type": "float", "units": "%"},
+    {"name": "T_K", "type": "float", "units": "K"},
+    {"name": "delta_free_energy_eV", "type": "float", "units": "eV"},
+    {"name": "preferred_mechanism", "type": "string"}
+  ],
+  "optional_columns": [
+    {"name": "delta_free_energy_eV_per_cation", "type": "float", "units": "eV/cation"}
+  ]
+}

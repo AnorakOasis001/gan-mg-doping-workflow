@@ -4,6 +4,7 @@ import argparse
 import importlib.util
 import json
 import logging
+import hashlib
 import math
 import os
 import platform
@@ -23,10 +24,12 @@ from gan_mg.analysis.thermo import (
 )
 from gan_mg.demo.generate import generate_demo_csv
 from gan_mg.analysis.figures import regenerate_thermo_figure
+from gan_mg.analysis.crossover import derive_mechanism_crossover_dataset
 from gan_mg.import_results import import_results_to_run
 from gan_mg.science.mixing import derive_mixing_dataset
 from gan_mg.science.gibbs import derive_gibbs_summary_dataset
 from gan_mg.science.per_structure import derive_per_structure_dataset
+from gan_mg.science.reference import load_reference_config
 from gan_mg.services import analyze_run, sweep_run
 from gan_mg.validation import ValidationError, validate_output_file
 from gan_mg.run import (
@@ -124,6 +127,17 @@ def _runtime_seconds(start_time: float) -> float:
 def _iso_utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
+
+def _sha256_hex(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as f:
+        while chunk := f.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _file_manifest_entry(path: Path) -> dict[str, str]:
+    return {"path": str(Path(path).resolve()), "sha256": _sha256_hex(path)}
 
 
 def configure_logging(verbose: bool, quiet: bool) -> int:
@@ -342,23 +356,55 @@ def build_gibbs_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentP
     return parser
 
 
+
+
+def build_reproduce_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser(
+        "reproduce",
+        help="One-command reproduction workflows.",
+    )
+    reproduce_sub = parser.add_subparsers(dest="reproduce_command")
+
+    overlay = reproduce_sub.add_parser(
+        "overlay",
+        help="Ensure derive/mix/gibbs outputs exist, regenerate overlay, and write a reproducibility manifest.",
+    )
+    add_run_args(overlay)
+    overlay.add_argument(
+        "--reference",
+        type=Path,
+        required=True,
+        help="Path to reference config (.json or .toml).",
+    )
+    overlay.add_argument(
+        "--temps",
+        required=True,
+        help="Comma-separated temperature list in K, e.g. 300,500,700,1000",
+    )
+
+    return parser
 def _parse_temperatures(args: argparse.Namespace) -> list[float]:
-    if args.temps:
-        values = [token.strip() for token in str(args.temps).split(",") if token.strip()]
+    temps_arg = getattr(args, "temps", None)
+    t_min = getattr(args, "T_min", None)
+    t_max = getattr(args, "T_max", None)
+    n_t = getattr(args, "nT", None)
+
+    if temps_arg:
+        values = [token.strip() for token in str(temps_arg).split(",") if token.strip()]
         if not values:
             raise SystemExit("--temps provided but empty")
         temps = [float(v) for v in values]
-    elif args.T_min is not None or args.T_max is not None or args.nT is not None:
-        if args.T_min is None or args.T_max is None or args.nT is None:
+    elif t_min is not None or t_max is not None or n_t is not None:
+        if t_min is None or t_max is None or n_t is None:
             raise SystemExit("Sweep form requires --T-min, --T-max, and --nT together")
-        if args.nT < 1:
+        if n_t < 1:
             raise SystemExit("--nT must be >= 1")
-        if args.nT == 1:
-            temps = [float(args.T_min)]
+        if n_t == 1:
+            temps = [float(t_min)]
         else:
             temps = [
-                args.T_min + i * (args.T_max - args.T_min) / (args.nT - 1)
-                for i in range(args.nT)
+                t_min + i * (t_max - t_min) / (n_t - 1)
+                for i in range(n_t)
             ]
     else:
         raise SystemExit("Provide either --temps or sweep form --T-min/--T-max/--nT")
@@ -745,6 +791,35 @@ def handle_mix(args: argparse.Namespace) -> None:
     logger.info("Derived athermal summary: %s", summary_path)
 
 
+def _write_overlay_related_figures(run_dir: Path, all_mech_path: Path) -> tuple[Path, Path, Path | None]:
+    try:
+        from gan_mg.viz.overlay import (
+            plot_athermal_emin_vs_doping,
+            plot_overlay_dgmix_vs_doping_multi_t,
+        )
+    except ModuleNotFoundError as e:
+        raise SystemExit(
+            "Plotting requires matplotlib. Install with\n"
+            "  python -m pip install -e \'.[plot]\'\n"
+            "or\n"
+            "  python -m pip install -e \'.[dev,plot]\'\n"
+        ) from e
+
+
+    overlay_path = run_dir / "figures" / "overlay_dGmix_vs_doping_multiT.png"
+    plot_overlay_dgmix_vs_doping_multi_t(all_mech_path, overlay_path)
+
+    athermal_png: Path | None = None
+    athermal_csv = run_dir / "derived" / "mixing_athermal_summary.csv"
+    if athermal_csv.exists():
+        athermal_png = run_dir / "figures" / "athermal_Emixmin_vs_doping.png"
+        plot_athermal_emin_vs_doping(athermal_csv, athermal_png)
+
+    crossover_csv, crossover_png = derive_mechanism_crossover_dataset(run_dir)
+    logger.info("Wrote: %s", crossover_csv)
+    return overlay_path, crossover_png, athermal_png
+
+
 def handle_gibbs(args: argparse.Namespace) -> None:
     if args.run_id is None:
         args.run_id = latest_run_id(Path(args.run_dir))
@@ -767,28 +842,75 @@ def handle_gibbs(args: argparse.Namespace) -> None:
     logger.info("Derived Gibbs summary: %s", gibbs_path)
     logger.info("Derived all-mechanisms Gibbs summary: %s", all_mech_path)
 
-    try:
-        from gan_mg.viz.overlay import (
-            plot_athermal_emin_vs_doping,
-            plot_overlay_dgmix_vs_doping_multi_t,
-        )
-    except ModuleNotFoundError as e:
-        raise SystemExit(
-            "Plotting requires matplotlib. Install with:\n"
-            "  python -m pip install -e '.[plot]'\n"
-            "or\n"
-            "  python -m pip install -e '.[dev,plot]'\n"
-        ) from e
-
-    overlay_path = run_dir / "figures" / "overlay_dGmix_vs_doping_multiT.png"
-    plot_overlay_dgmix_vs_doping_multi_t(all_mech_path, overlay_path)
+    overlay_path, crossover_png, athermal_png = _write_overlay_related_figures(run_dir, all_mech_path)
     logger.info("Wrote: %s", overlay_path)
+    logger.info("Wrote: %s", crossover_png)
 
-    athermal_csv = run_dir / "derived" / "mixing_athermal_summary.csv"
-    if athermal_csv.exists():
-        athermal_png = run_dir / "figures" / "athermal_Emixmin_vs_doping.png"
-        plot_athermal_emin_vs_doping(athermal_csv, athermal_png)
+    if athermal_png is not None:
         logger.info("Wrote: %s", athermal_png)
+
+
+def handle_reproduce_overlay(args: argparse.Namespace) -> None:
+    if args.run_id is None:
+        args.run_id = latest_run_id(Path(args.run_dir))
+
+    run_dir = Path(args.run_dir) / args.run_id
+    if not run_dir.exists():
+        raise SystemExit(f"Run not found: {run_dir}")
+
+    per_structure_csv = run_dir / "derived" / "per_structure.csv"
+    if not per_structure_csv.exists():
+        per_structure_csv = derive_per_structure_dataset(run_dir)
+        logger.info("Derived per-structure dataset: %s", per_structure_csv)
+
+    mixing_csv = run_dir / "derived" / "per_structure_mixing.csv"
+    if not mixing_csv.exists():
+        mixing_csv, summary_path = derive_mixing_dataset(run_dir, reference_path=args.reference)
+        logger.info("Derived mixing dataset: %s", mixing_csv)
+        logger.info("Derived athermal summary: %s", summary_path)
+
+    temperatures = _parse_temperatures(args)
+    gibbs_path, all_mech_path = derive_gibbs_summary_dataset(run_dir, temperatures)
+    overlay_path, crossover_png, athermal_png = _write_overlay_related_figures(run_dir, all_mech_path)
+
+    reference_model, reference_energies = load_reference_config(Path(args.reference))
+
+    outputs = [
+        str(gibbs_path.resolve()),
+        str(all_mech_path.resolve()),
+        str(overlay_path.resolve()),
+        str((run_dir / "derived" / "mechanism_crossover.csv").resolve()),
+        str(crossover_png.resolve()),
+    ]
+    if athermal_png is not None:
+        outputs.append(str(athermal_png.resolve()))
+
+    manifest = {
+        "git_commit": get_git_commit(),
+        "timestamp_utc": _iso_utc_now(),
+        "run_id": args.run_id,
+        "run_dir": str(run_dir.resolve()),
+        "inputs": {
+            "inputs/results.csv": _file_manifest_entry(run_dir / "inputs" / "results.csv"),
+            "derived/per_structure.csv": _file_manifest_entry(per_structure_csv),
+            "derived/per_structure_mixing.csv": _file_manifest_entry(mixing_csv),
+            "inputs/reference.json": _file_manifest_entry(Path(args.reference)),
+        },
+        "reference": {
+            "model": reference_model,
+            "energies": {k: v for k, v in reference_energies.__dict__.items() if v is not None},
+        },
+        "temperatures_K": [float(t) for t in temperatures],
+        "outputs": sorted(outputs),
+    }
+
+    manifest_path = run_dir / "derived" / "repro_manifest.json"
+    write_json(manifest_path, manifest)
+
+    logger.info("Final outputs:")
+    for output_path in sorted(outputs + [str(manifest_path.resolve())]):
+        logger.info("%s", output_path)
+
 
 def handle_bench(args: argparse.Namespace, bench_parser: argparse.ArgumentParser) -> None:
     if args.bench_command != "thermo":
@@ -888,6 +1010,7 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser, ar
     build_derive_parser(subparsers)
     build_mix_parser(subparsers)
     build_gibbs_parser(subparsers)
+    build_reproduce_parser(subparsers)
     bench_parser = build_bench_parser(subparsers)
 
     return parser, runs_parser, bench_parser
@@ -934,6 +1057,11 @@ def main() -> None:
         handle_mix(args)
     elif args.command == "gibbs":
         handle_gibbs(args)
+    elif args.command == "reproduce":
+        if args.reproduce_command == "overlay":
+            handle_reproduce_overlay(args)
+        else:
+            parser.print_help()
     elif args.command == "bench":
         handle_bench(args, bench_parser)
     else:
