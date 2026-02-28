@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import platform
 import subprocess
-from dataclasses import asdict
+from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -18,6 +18,12 @@ from gan_mg.analysis.thermo import (
     thermo_from_csv_streaming,
     write_thermo_txt,
 )
+from gan_mg.payloads import (
+    build_diagnostics_payload,
+    build_metrics_payload,
+    build_provenance,
+)
+from gan_mg.run import compute_reproducibility_hash
 from gan_mg.validation import validate_output_file
 
 SCHEMA_VERSION = 1
@@ -49,6 +55,10 @@ def _get_git_commit() -> str | None:
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _iso_utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def run_from_config(config_path: Path) -> None:
@@ -83,6 +93,28 @@ def run_from_config(config_path: Path) -> None:
     metrics_path = out_tables / "metrics.json"
     diagnostics_path = out_tables / f"diagnostics_T{int(temperature)}.json"
 
+    reproducibility_hash = compute_reproducibility_hash(
+        input_csv=csv_path,
+        temperature_grid=[temperature],
+        code_version=__version__,
+    )
+    cli_args = {
+        "config_path": str(config_path),
+        "analyze": {
+            "csv": str(csv_path),
+            "T": temperature,
+            "energy_col": energy_col,
+            "chunksize": chunksize,
+            "diagnostics": diagnostics,
+            "output_root": str(output_root),
+        },
+    }
+    provenance = build_provenance(
+        cli_args=cli_args,
+        input_hash=reproducibility_hash,
+        git_commit=_get_git_commit(),
+    )
+
     if chunksize is None:
         result = boltzmann_thermo_from_csv(csv_path, T=temperature, energy_col=energy_col)
     else:
@@ -93,14 +125,13 @@ def run_from_config(config_path: Path) -> None:
             chunksize=chunksize,
         )
 
-    metrics_payload = {
-        "temperature_K": result.temperature_K,
-        "num_configurations": result.num_configurations,
-        "mixing_energy_min_eV": result.mixing_energy_min_eV,
-        "mixing_energy_avg_eV": result.mixing_energy_avg_eV,
-        "partition_function": result.partition_function,
-        "free_energy_mix_eV": result.free_energy_mix_eV,
-    }
+    metrics_payload = build_metrics_payload(
+        result,
+        reproducibility_hash=reproducibility_hash,
+        created_at=_iso_utc_now(),
+        provenance=provenance,
+        timings=None,
+    )
     _write_json(metrics_path, metrics_payload)
     validate_output_file(metrics_path, kind="metrics")
     write_thermo_txt(result, thermo_path)
@@ -119,7 +150,13 @@ def run_from_config(config_path: Path) -> None:
                 chunksize=chunksize,
             )
 
-        _write_json(diagnostics_path, asdict(diagnostics_result))
+        diagnostics_payload = build_diagnostics_payload(
+            diagnostics_result,
+            reproducibility_hash=reproducibility_hash,
+            provenance=provenance,
+            notes=None,
+        )
+        _write_json(diagnostics_path, diagnostics_payload)
         validate_output_file(diagnostics_path, kind="diagnostics")
         produced_outputs.append(str(diagnostics_path))
 
@@ -136,4 +173,3 @@ def run_from_config(config_path: Path) -> None:
     manifest_path = out_tables / "run_manifest.json"
     _write_json(manifest_path, manifest)
     validate_output_file(manifest_path, kind="run_manifest")
-

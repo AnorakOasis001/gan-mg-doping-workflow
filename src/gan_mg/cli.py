@@ -11,7 +11,6 @@ import random
 import subprocess
 import sys
 import time
-from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -32,6 +31,12 @@ from gan_mg.analysis.thermo import (
 from gan_mg.demo.generate import generate_demo_csv
 from gan_mg.analysis.figures import regenerate_thermo_figure
 from gan_mg.import_results import import_results_to_run
+from gan_mg.payloads import (
+    build_diagnostics_payload,
+    build_metrics_payload,
+    build_metrics_sweep_payload,
+    build_provenance,
+)
 from gan_mg.validation import ValidationError, validate_output_file
 from gan_mg.run import (
     init_run,
@@ -51,7 +56,6 @@ LOG_LEVELS = {
     "verbose": logging.DEBUG,
 }
 logger = logging.getLogger(__name__)
-SCHEMA_VERSION = "1.1"
 
 COMMON_FLOW_EXAMPLES = """Examples:
   # Minimal end-to-end run
@@ -91,20 +95,6 @@ def get_git_commit() -> str | None:
 
     commit = completed.stdout.strip()
     return commit or None
-
-
-def get_runtime_provenance(
-    cli_args: dict[str, Any],
-    input_hash: str | None,
-) -> dict[str, Any]:
-    return {
-        "schema_version": SCHEMA_VERSION,
-        "git_commit": get_git_commit(),
-        "python_version": platform.python_version(),
-        "platform": platform.platform(),
-        "cli_args": dict(cli_args),
-        "input_hash": input_hash,
-    }
 
 
 def log_profile(stage: str, start_time: float, num_configurations: int) -> None:
@@ -385,20 +375,18 @@ def handle_analyze(args: argparse.Namespace) -> None:
     if args.profile:
         timings["runtime_s"] = _runtime_seconds(stage_start)
 
-    metrics: dict[str, Any] = {
-        "temperature_K": result.temperature_K,
-        "num_configurations": result.num_configurations,
-        "mixing_energy_min_eV": result.mixing_energy_min_eV,
-        "mixing_energy_avg_eV": result.mixing_energy_avg_eV,
-        "partition_function": result.partition_function,
-        "free_energy_mix_eV": result.free_energy_mix_eV,
-        "created_at": _iso_utc_now(),
-    }
-    if reproducibility_hash:
-        metrics["reproducibility_hash"] = reproducibility_hash
-    if timings:
-        metrics["timings"] = timings
-    metrics["provenance"] = get_runtime_provenance(vars(args), reproducibility_hash)
+    provenance = build_provenance(
+        cli_args=vars(args),
+        input_hash=reproducibility_hash,
+        git_commit=get_git_commit(),
+    )
+    metrics = build_metrics_payload(
+        result,
+        reproducibility_hash=reproducibility_hash,
+        created_at=_iso_utc_now(),
+        provenance=provenance,
+        timings=timings or None,
+    )
 
     if args.run_id is not None:
         metrics_path = run_dir / "outputs" / "metrics.json"
@@ -423,10 +411,11 @@ def handle_analyze(args: argparse.Namespace) -> None:
                 energy_column=args.energy_col,
                 chunksize=args.chunksize,
             )
-        diagnostics_payload = asdict(diagnostics)
-        diagnostics_payload["provenance"] = get_runtime_provenance(
-            vars(args),
-            reproducibility_hash,
+        diagnostics_payload = build_diagnostics_payload(
+            diagnostics,
+            reproducibility_hash=reproducibility_hash,
+            provenance=provenance,
+            notes=None,
         )
         write_metrics_json(diagnostics_path, diagnostics_payload)
         logger.info("Wrote: %s", diagnostics_path)
@@ -485,14 +474,12 @@ def handle_sweep(args: argparse.Namespace) -> None:
     if args.profile:
         timings["runtime_s"] = _runtime_seconds(stage_start)
 
-    metrics: dict[str, Any] = {
-        "temperature_grid_K": [row["temperature_K"] for row in rows],
-        "num_temperatures": len(rows),
-        "reproducibility_hash": reproducibility_hash,
-        "created_at": _iso_utc_now(),
-    }
-    if timings:
-        metrics["timings"] = timings
+    metrics = build_metrics_sweep_payload(
+        rows,
+        reproducibility_hash=reproducibility_hash,
+        created_at=_iso_utc_now(),
+        timings=timings or None,
+    )
 
     if args.csv is None:
         metrics_path = run_dir / "outputs" / "metrics_sweep.json"
