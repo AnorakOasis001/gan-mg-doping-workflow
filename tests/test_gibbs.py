@@ -99,6 +99,7 @@ def _write_per_structure_mixing_csv(path: Path) -> None:
 
 
 def test_cli_gibbs_generates_summary_and_plots(tmp_path: Path) -> None:
+    pytest.importorskip("matplotlib")
     run_dir = tmp_path / "runs"
     run_id = "gibbs-test"
     run_path = run_dir / run_id
@@ -167,6 +168,7 @@ def test_cli_gibbs_requires_mixing_input(tmp_path: Path) -> None:
 
 
 def test_cli_reproduce_overlay_writes_manifest(tmp_path: Path) -> None:
+    pytest.importorskip("matplotlib")
     run_dir = tmp_path / "runs"
     run_id = "repro"
     run_path = run_dir / run_id
