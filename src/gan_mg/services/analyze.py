@@ -5,18 +5,18 @@ from pathlib import Path
 from typing import Any
 
 from gan_mg.artifacts import write_json
-from gan_mg.analysis.thermo import (
-    ThermoResult,
-    boltzmann_diagnostics_from_energies,
-    boltzmann_thermo_from_csv,
-    write_thermo_txt,
-)
+from gan_mg.analysis.thermo import write_thermo_txt
 from gan_mg.io.results_csv import (
     diagnostics_from_csv_streaming,
     read_energies_csv,
     thermo_from_csv_streaming,
 )
 from gan_mg.payloads import build_diagnostics_payload
+from gan_mg.science.thermo import (
+    ThermoResult,
+    boltzmann_diagnostics_from_energies,
+    boltzmann_thermo_from_energies,
+)
 
 
 @dataclass(frozen=True)
@@ -44,7 +44,8 @@ def analyze_run(
     include_reproducibility_hash: bool,
 ) -> AnalyzeArtifacts:
     if chunksize is None:
-        result = boltzmann_thermo_from_csv(csv_path, T=temperature_K, energy_col=energy_col)
+        energies = read_energies_csv(csv_path, energy_col=energy_col)
+        result = boltzmann_thermo_from_energies(energies, T=temperature_K)
     else:
         result = thermo_from_csv_streaming(
             csv_path=csv_path,
