@@ -71,3 +71,17 @@ ganmg plot --run-id demo --kind thermo
 Writes:
 
 - `runs/demo/figures/thermo_vs_T.png`
+
+## Inspect run inventory
+
+List discovered runs and compact artifact availability:
+
+```bash
+ganmg runs list --runs-dir runs --limit 5
+```
+
+Print the latest run id (or structured metadata with `--json`):
+
+```bash
+ganmg runs latest --runs-dir runs
+```
