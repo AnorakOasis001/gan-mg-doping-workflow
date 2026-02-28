@@ -4,7 +4,7 @@ import csv
 from pathlib import Path
 from typing import Any
 
-from gan_mg._mpl import ensure_agg_backend
+from gan_mg._mpl import ensure_agg
 
 
 CROSSOVER_COLUMNS = (
@@ -94,7 +94,7 @@ def derive_mechanism_crossover_dataset(run_dir: Path) -> tuple[Path, Path]:
 
 
 def plot_mechanism_crossover_map(crossover_csv: Path, out_png: Path) -> None:
-    ensure_agg_backend()
+    ensure_agg()
     import matplotlib.pyplot as plt
     import numpy as np
 

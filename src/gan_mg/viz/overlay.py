@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from gan_mg._mpl import ensure_agg_backend
+from gan_mg._mpl import ensure_agg
 
 
 def _read_rows(path: Path) -> list[dict[str, str]]:
@@ -12,7 +12,7 @@ def _read_rows(path: Path) -> list[dict[str, str]]:
 
 
 def plot_overlay_dgmix_vs_doping_multi_t(gibbs_summary_csv: Path, out_png: Path) -> None:
-    ensure_agg_backend()
+    ensure_agg()
     import matplotlib.pyplot as plt
 
     rows = _read_rows(gibbs_summary_csv)
@@ -48,7 +48,7 @@ def plot_overlay_dgmix_vs_doping_multi_t(gibbs_summary_csv: Path, out_png: Path)
 
 
 def plot_athermal_emin_vs_doping(summary_csv: Path, out_png: Path) -> None:
-    ensure_agg_backend()
+    ensure_agg()
     import matplotlib.pyplot as plt
 
     rows = _read_rows(summary_csv)
