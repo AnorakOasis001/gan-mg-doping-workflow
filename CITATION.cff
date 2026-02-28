@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+title: "gan-mg-doping-workflow"
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+authors:
+  - family-names: "Team"
+    given-names: "GAN-Mg"
+repository-code: "https://github.com/example/gan-mg-doping-workflow"
+version: "0.1.0"
+date-released: "2026-02-28"
+license: MIT

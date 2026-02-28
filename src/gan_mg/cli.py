@@ -1567,6 +1567,12 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser, ar
         action="store_true",
         help="Print runtime and configuration count for generate/analyze/sweep.",
     )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=__version__,
+        help="Print package version and exit.",
+    )
     subparsers = parser.add_subparsers(dest="command")
 
     build_generate_parser(subparsers)
