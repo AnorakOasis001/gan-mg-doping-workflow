@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
+from typing import Any, Mapping, Sequence
 
 
 THERMO_VS_T_FIELDNAMES = [
@@ -19,13 +20,13 @@ def ensure_parent_dir(path: Path) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
 
 
-def write_json(path: Path, obj: dict) -> None:
+def write_json(path: Path, obj: Mapping[str, Any]) -> None:
     path = Path(path)
     ensure_parent_dir(path)
     path.write_text(json.dumps(obj, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def write_thermo_vs_T_csv(rows: list[dict], out_csv: Path) -> None:
+def write_thermo_vs_T_csv(rows: Sequence[Mapping[str, Any]], out_csv: Path) -> None:
     out_csv = Path(out_csv)
     ensure_parent_dir(out_csv)
 
