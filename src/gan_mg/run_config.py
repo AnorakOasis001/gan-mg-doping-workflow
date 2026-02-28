@@ -2,26 +2,16 @@ from __future__ import annotations
 
 import platform
 import subprocess
-from dataclasses import asdict
 from hashlib import sha256
 from pathlib import Path
-from typing import Any
 
 from gan_mg import __version__
-from gan_mg.artifacts import write_json
 from gan_mg._toml import load_toml
-from gan_mg.analysis.thermo import (
-    boltzmann_diagnostics_from_energies,
-    boltzmann_thermo_from_csv,
-    diagnostics_from_csv_streaming,
-    read_energies_csv,
-    thermo_from_csv_streaming,
-    write_thermo_txt,
-)
+from gan_mg.artifacts import write_json
+from gan_mg.services import analyze_run
 from gan_mg.validation import validate_output_file
 
 SCHEMA_VERSION = 1
-
 
 
 def _file_sha256(path: Path) -> str:
@@ -44,10 +34,6 @@ def _get_git_commit() -> str | None:
 
     commit = completed.stdout.strip()
     return commit or None
-
-
-def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    write_json(path, payload)
 
 
 def run_from_config(config_path: Path) -> None:
@@ -78,49 +64,28 @@ def run_from_config(config_path: Path) -> None:
         output_root = (config_path.parent / output_root).resolve()
 
     out_tables = output_root / "results" / "tables"
-    thermo_path = out_tables / "demo_thermo.txt"
-    metrics_path = out_tables / "metrics.json"
-    diagnostics_path = out_tables / f"diagnostics_T{int(temperature)}.json"
+    artifacts = analyze_run(
+        csv_path=csv_path,
+        metrics_path=out_tables / "metrics.json",
+        thermo_path=out_tables / "demo_thermo.txt",
+        temperature_K=temperature,
+        energy_col=energy_col,
+        chunksize=chunksize,
+        diagnostics=diagnostics,
+        diagnostics_path=out_tables / f"diagnostics_T{int(temperature)}.json",
+        reproducibility_hash=None,
+        created_at=None,
+        timings=None,
+        provenance=None,
+        include_reproducibility_hash=False,
+    )
 
-    if chunksize is None:
-        result = boltzmann_thermo_from_csv(csv_path, T=temperature, energy_col=energy_col)
-    else:
-        result = thermo_from_csv_streaming(
-            csv_path=csv_path,
-            temperature_K=temperature,
-            energy_column=energy_col,
-            chunksize=chunksize,
-        )
+    validate_output_file(artifacts.metrics_path, kind="metrics")
 
-    metrics_payload = {
-        "temperature_K": result.temperature_K,
-        "num_configurations": result.num_configurations,
-        "mixing_energy_min_eV": result.mixing_energy_min_eV,
-        "mixing_energy_avg_eV": result.mixing_energy_avg_eV,
-        "partition_function": result.partition_function,
-        "free_energy_mix_eV": result.free_energy_mix_eV,
-    }
-    _write_json(metrics_path, metrics_payload)
-    validate_output_file(metrics_path, kind="metrics")
-    write_thermo_txt(result, thermo_path)
-
-    produced_outputs = [str(metrics_path), str(thermo_path)]
-
-    if diagnostics:
-        if chunksize is None:
-            energies = read_energies_csv(csv_path, energy_col=energy_col)
-            diagnostics_result = boltzmann_diagnostics_from_energies(energies, T=temperature)
-        else:
-            diagnostics_result = diagnostics_from_csv_streaming(
-                csv_path=csv_path,
-                temperature_K=temperature,
-                energy_column=energy_col,
-                chunksize=chunksize,
-            )
-
-        _write_json(diagnostics_path, asdict(diagnostics_result))
-        validate_output_file(diagnostics_path, kind="diagnostics")
-        produced_outputs.append(str(diagnostics_path))
+    produced_outputs = [str(artifacts.metrics_path), str(artifacts.thermo_path)]
+    if artifacts.diagnostics_path is not None:
+        validate_output_file(artifacts.diagnostics_path, kind="diagnostics")
+        produced_outputs.append(str(artifacts.diagnostics_path))
 
     manifest = {
         "config_sha256": _file_sha256(config_path),
@@ -133,6 +98,5 @@ def run_from_config(config_path: Path) -> None:
         "python_version": platform.python_version(),
     }
     manifest_path = out_tables / "run_manifest.json"
-    _write_json(manifest_path, manifest)
+    write_json(manifest_path, manifest)
     validate_output_file(manifest_path, kind="run_manifest")
-

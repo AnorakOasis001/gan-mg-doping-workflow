@@ -8,7 +8,7 @@ from gan_mg.analysis.thermo import ThermoDiagnostics, ThermoSweepRow
 
 def build_diagnostics_payload(
     diagnostics: ThermoDiagnostics,
-    provenance: dict[str, Any],
+    provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "temperature_K": diagnostics.temperature_K,
@@ -22,7 +22,8 @@ def build_diagnostics_payload(
         "logZ_absolute": diagnostics.logZ_absolute,
         "notes": diagnostics.notes,
     }
-    payload["provenance"] = provenance
+    if provenance is not None:
+        payload["provenance"] = provenance
     return payload
 
 
