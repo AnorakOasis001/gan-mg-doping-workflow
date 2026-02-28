@@ -1,0 +1,14 @@
+{
+  "dataset": "crossover_uncertainty.csv",
+  "description": "Uncertainty-aware mechanism crossover summary comparing vn and mgi Gibbs free energies.",
+  "required_columns": [
+    {"name": "x_mg_cation", "type": "float", "units": "fraction"},
+    {"name": "doping_level_percent", "type": "float", "units": "%"},
+    {"name": "T_K", "type": "float", "units": "K"},
+    {"name": "delta_G_mean_eV", "type": "float", "units": "eV"},
+    {"name": "delta_G_ci_low_eV", "type": "float", "units": "eV"},
+    {"name": "delta_G_ci_high_eV", "type": "float", "units": "eV"},
+    {"name": "preferred", "type": "string"},
+    {"name": "robust", "type": "bool"}
+  ]
+}
