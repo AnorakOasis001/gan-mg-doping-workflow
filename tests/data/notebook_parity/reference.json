@@ -1,0 +1,7 @@
+{
+  "model": "gan_mg3n2",
+  "energies": {
+    "E_GaN_fu": -10.0,
+    "E_Mg3N2_fu": -5.0
+  }
+}

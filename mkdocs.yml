@@ -19,6 +19,7 @@ nav:
   - API usage: api-usage.md
   - Repository README: repository-readme.md
   - Thermodynamics math: thermodynamics-math.md
+  - Science definitions: science_definitions.md
   - Numerical stability: numerical_stability.md
   - Ensemble diagnostics: ensemble_diagnostics.md
   - Output contract validation: output-contract-validation.md

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+from importlib import metadata as importlib_metadata
 import json
 import logging
 import hashlib
@@ -12,8 +13,10 @@ import random
 import subprocess
 import sys
 import time
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
+import shutil
 from typing import Any
 
 from gan_mg import __version__
@@ -138,6 +141,15 @@ def _sha256_hex(path: Path) -> str:
 
 def _file_manifest_entry(path: Path) -> dict[str, str]:
     return {"path": str(Path(path).resolve()), "sha256": _sha256_hex(path)}
+
+
+def _gan_mg_package_version() -> str | None:
+    for dist_name in ("gan-mg-doping-workflow", "gan_mg"):
+        try:
+            return importlib_metadata.version(dist_name)
+        except importlib_metadata.PackageNotFoundError:
+            continue
+    return None
 
 
 def configure_logging(verbose: bool, quiet: bool) -> int:
@@ -382,6 +394,31 @@ def build_reproduce_parser(subparsers: argparse._SubParsersAction[argparse.Argum
         help="Comma-separated temperature list in K, e.g. 300,500,700,1000",
     )
 
+    return parser
+
+
+def build_repropack_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser(
+        "repropack",
+        help="Export a portable reproducibility pack for a run.",
+    )
+    add_run_args(parser)
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path("repropack"),
+        help="Destination directory for exported repro packs (default: repropack).",
+    )
+    parser.add_argument(
+        "--zip",
+        action="store_true",
+        help="Also write <out>/<run-id>.zip containing the exported repro pack.",
+    )
+    parser.add_argument(
+        "--zip-only",
+        action="store_true",
+        help="With --zip, remove the unpacked folder after creating the zip archive.",
+    )
     return parser
 def _parse_temperatures(args: argparse.Namespace) -> list[float]:
     temps_arg = getattr(args, "temps", None)
@@ -875,26 +912,37 @@ def handle_reproduce_overlay(args: argparse.Namespace) -> None:
 
     reference_model, reference_energies = load_reference_config(Path(args.reference))
 
-    outputs = [
-        str(gibbs_path.resolve()),
-        str(all_mech_path.resolve()),
-        str(overlay_path.resolve()),
-        str((run_dir / "derived" / "mechanism_crossover.csv").resolve()),
-        str(crossover_png.resolve()),
+    output_files = [
+        gibbs_path,
+        all_mech_path,
+        overlay_path,
+        run_dir / "derived" / "mechanism_crossover.csv",
+        crossover_png,
     ]
     if athermal_png is not None:
-        outputs.append(str(athermal_png.resolve()))
+        output_files.append(athermal_png)
+
+    outputs = sorted(str(path.resolve()) for path in output_files)
+    file_hashes = {
+        str(path.resolve()): _sha256_hex(path)
+        for path in sorted(
+            [run_dir / "inputs" / "results.csv", per_structure_csv, mixing_csv, Path(args.reference)] + output_files
+        )
+    }
 
     manifest = {
         "git_commit": get_git_commit(),
         "timestamp_utc": _iso_utc_now(),
         "run_id": args.run_id,
         "run_dir": str(run_dir.resolve()),
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
+        "gan_mg_version": _gan_mg_package_version() or __version__,
         "inputs": {
             "inputs/results.csv": _file_manifest_entry(run_dir / "inputs" / "results.csv"),
             "derived/per_structure.csv": _file_manifest_entry(per_structure_csv),
             "derived/per_structure_mixing.csv": _file_manifest_entry(mixing_csv),
-            "inputs/reference.json": _file_manifest_entry(Path(args.reference)),
+            f"inputs/{Path(args.reference).name}": _file_manifest_entry(Path(args.reference)),
         },
         "reference": {
             "model": reference_model,
@@ -902,6 +950,7 @@ def handle_reproduce_overlay(args: argparse.Namespace) -> None:
         },
         "temperatures_K": [float(t) for t in temperatures],
         "outputs": sorted(outputs),
+        "file_hashes": file_hashes,
     }
 
     manifest_path = run_dir / "derived" / "repro_manifest.json"
@@ -910,6 +959,127 @@ def handle_reproduce_overlay(args: argparse.Namespace) -> None:
     logger.info("Final outputs:")
     for output_path in sorted(outputs + [str(manifest_path.resolve())]):
         logger.info("%s", output_path)
+
+
+def _resolve_reference_input(run_dir: Path) -> Path:
+    ref_json = run_dir / "inputs" / "reference.json"
+    ref_toml = run_dir / "inputs" / "reference.toml"
+    if ref_json.exists():
+        return ref_json
+    if ref_toml.exists():
+        return ref_toml
+    raise SystemExit(
+        "Core input missing: expected runs/<id>/inputs/reference.json or runs/<id>/inputs/reference.toml"
+    )
+
+
+def _write_repropack_index(index_path: Path, run_id: str, copied_files: list[Path], git_sha: str | None) -> None:
+    temps_hint = "<temps>"
+    descriptions = {
+        "inputs/results.csv": "Core generated/imported per-structure energies used as analysis input.",
+        "inputs/reference.json": "Reference energy model/config used for mixing-energy calculation.",
+        "inputs/reference.toml": "Reference energy model/config used for mixing-energy calculation.",
+        "derived/per_structure.csv": "Derived per-structure table with mechanism labels and composition metadata.",
+        "derived/per_structure_mixing.csv": "Derived mixing-energy table including E_mix and dE columns.",
+        "derived/gibbs_summary.csv": "Boltzmann Gibbs summary by mechanism, composition, and temperature.",
+        "derived/all_mechanisms_gibbs_summary.csv": "Gibbs summary across all mechanisms used for overlays/crossover.",
+        "derived/mechanism_crossover.csv": "Mechanism crossover table with ΔG = Gmix(vn) - Gmix(mgi).",
+        "derived/repro_manifest.json": "Reproducibility manifest with environment metadata and file hashes.",
+    }
+
+    lines = [
+        f"# Repro Pack: {run_id}",
+        "",
+        "This pack contains core inputs and available derived artifacts for reproducibility.",
+        "",
+        "## Included files",
+        "",
+    ]
+    for rel_path in sorted(str(path.as_posix()) for path in copied_files):
+        description = descriptions.get(rel_path, "Generated figure artifact.")
+        lines.append(f"- `{rel_path}`: {description}")
+    lines.extend(
+        [
+            "",
+            "## Rerun",
+            "",
+            "```bash",
+            f"ganmg reproduce overlay --run-id {run_id} --reference inputs/reference.json --temps {temps_hint}",
+            "```",
+            "",
+            "Adjust `--reference` to `inputs/reference.toml` if your pack uses TOML.",
+            "",
+            "## Provenance",
+            "",
+            f"- Git SHA: `{git_sha if git_sha else 'unknown'}`",
+        ]
+    )
+    index_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def handle_repropack(args: argparse.Namespace) -> None:
+    if args.run_id is None:
+        args.run_id = latest_run_id(Path(args.run_dir))
+
+    run_dir = Path(args.run_dir) / args.run_id
+    if not run_dir.exists():
+        raise SystemExit(f"Run not found: {run_dir}")
+    if args.zip_only and not args.zip:
+        raise SystemExit("--zip-only requires --zip")
+
+    core_results = run_dir / "inputs" / "results.csv"
+    if not core_results.exists():
+        raise SystemExit("Core input missing: expected runs/<id>/inputs/results.csv")
+    reference_path = _resolve_reference_input(run_dir)
+
+    destination_root = Path(args.out) / args.run_id
+    destination_root.mkdir(parents=True, exist_ok=True)
+
+    candidate_files = [
+        core_results,
+        reference_path,
+        run_dir / "derived" / "per_structure.csv",
+        run_dir / "derived" / "per_structure_mixing.csv",
+        run_dir / "derived" / "gibbs_summary.csv",
+        run_dir / "derived" / "all_mechanisms_gibbs_summary.csv",
+        run_dir / "derived" / "mechanism_crossover.csv",
+        run_dir / "derived" / "repro_manifest.json",
+    ]
+    candidate_files.extend(sorted((run_dir / "figures").glob("*.png")))
+
+    copied_relpaths: list[Path] = []
+    for source in candidate_files:
+        if not source.exists():
+            continue
+        rel = source.relative_to(run_dir)
+        dest = destination_root / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, dest)
+        copied_relpaths.append(rel)
+
+    git_sha = None
+    manifest_path = run_dir / "derived" / "repro_manifest.json"
+    if manifest_path.exists():
+        try:
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            git_sha = payload.get("git_commit")
+        except json.JSONDecodeError:
+            git_sha = None
+
+    _write_repropack_index(destination_root / "index.md", args.run_id, copied_relpaths, git_sha)
+    logger.info("Wrote: %s", destination_root / "index.md")
+
+    if args.zip:
+        zip_path = Path(args.out) / f"{args.run_id}.zip"
+        with zipfile.ZipFile(zip_path, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for item in sorted(destination_root.rglob("*")):
+                if item.is_dir():
+                    continue
+                archive.write(item, item.relative_to(Path(args.out)))
+        logger.info("Wrote: %s", zip_path)
+        if args.zip_only:
+            shutil.rmtree(destination_root)
+            logger.info("Removed unpacked repro pack directory: %s", destination_root)
 
 
 def handle_bench(args: argparse.Namespace, bench_parser: argparse.ArgumentParser) -> None:
@@ -1011,6 +1181,7 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser, ar
     build_mix_parser(subparsers)
     build_gibbs_parser(subparsers)
     build_reproduce_parser(subparsers)
+    build_repropack_parser(subparsers)
     bench_parser = build_bench_parser(subparsers)
 
     return parser, runs_parser, bench_parser
@@ -1062,6 +1233,8 @@ def main() -> None:
             handle_reproduce_overlay(args)
         else:
             parser.print_help()
+    elif args.command == "repropack":
+        handle_repropack(args)
     elif args.command == "bench":
         handle_bench(args, bench_parser)
     else:
