@@ -421,7 +421,6 @@ def test_cli_import_fails_on_invalid_csv_schema(tmp_path: Path) -> None:
 
 def test_cli_plot_thermo_creates_figure_when_plot_extra_available(tmp_path: Path) -> None:
     pytest.importorskip("pandas")
-    pytest.importorskip("matplotlib")
 
     run_dir = tmp_path / "runs"
     run_id = "plot-run"

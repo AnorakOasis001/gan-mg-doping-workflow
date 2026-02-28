@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from gan_mg._mpl import ensure_agg
 from gan_mg.analysis.thermo import ThermoSweepRow
 
 
 def plot_thermo_vs_T(rows: list[ThermoSweepRow], out_png: Path) -> None:
-    import matplotlib
-
-    matplotlib.use("Agg")  # headless backend (CI-safe)
+    ensure_agg()
     import matplotlib.pyplot as plt
 
     temperature_K = [r["temperature_K"] for r in rows]

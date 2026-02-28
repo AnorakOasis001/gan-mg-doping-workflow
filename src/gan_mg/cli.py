@@ -20,6 +20,7 @@ import shutil
 from typing import Any
 
 from gan_mg import __version__
+from gan_mg._mpl import ensure_agg
 from gan_mg.artifacts import write_json
 from gan_mg.analysis.thermo import (
     boltzmann_thermo_from_energies,
@@ -628,6 +629,7 @@ def handle_sweep(args: argparse.Namespace) -> None:
 
     if args.plot:
         try:
+            ensure_agg()
             plot_thermo_vs_T(artifacts.rows, out_png)
             logger.info("Wrote: %s", out_png)
         except ModuleNotFoundError as e:
@@ -654,6 +656,7 @@ def handle_plot(args: argparse.Namespace) -> None:
 
     if args.kind == "thermo":
         try:
+            ensure_agg()
             out_png = regenerate_thermo_figure(
                 run_dir=run_dir,
                 energy_col=args.energy_col,
@@ -830,6 +833,7 @@ def handle_mix(args: argparse.Namespace) -> None:
 
 def _write_overlay_related_figures(run_dir: Path, all_mech_path: Path) -> tuple[Path, Path, Path | None]:
     try:
+        ensure_agg()
         from gan_mg.viz.overlay import (
             plot_athermal_emin_vs_doping,
             plot_overlay_dgmix_vs_doping_multi_t,

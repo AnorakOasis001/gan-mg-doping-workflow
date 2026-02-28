@@ -99,8 +99,6 @@ def _write_per_structure_mixing_csv(path: Path) -> None:
 
 
 def test_cli_gibbs_generates_summary_and_plots(tmp_path: Path) -> None:
-    pytest.importorskip("matplotlib")
-
     run_dir = tmp_path / "runs"
     run_id = "gibbs-test"
     run_path = run_dir / run_id
@@ -169,8 +167,6 @@ def test_cli_gibbs_requires_mixing_input(tmp_path: Path) -> None:
 
 
 def test_cli_reproduce_overlay_writes_manifest(tmp_path: Path) -> None:
-    pytest.importorskip("matplotlib")
-
     run_dir = tmp_path / "runs"
     run_id = "repro"
     run_path = run_dir / run_id
@@ -212,6 +208,11 @@ def test_cli_reproduce_overlay_writes_manifest(tmp_path: Path) -> None:
         "inputs/results.csv",
     ]
     assert manifest["outputs"]
+    for output_path in manifest["outputs"]:
+        candidate = Path(output_path)
+        if candidate.suffix == ".png":
+            assert candidate.exists()
+            assert candidate.stat().st_size > 0
     assert "python_version" in manifest
     assert "platform" in manifest
     assert "gan_mg_version" in manifest

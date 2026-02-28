@@ -4,6 +4,8 @@ import csv
 from pathlib import Path
 from typing import Any
 
+from gan_mg._mpl import ensure_agg
+
 
 CROSSOVER_COLUMNS = (
     "x_mg_cation",
@@ -92,9 +94,7 @@ def derive_mechanism_crossover_dataset(run_dir: Path) -> tuple[Path, Path]:
 
 
 def plot_mechanism_crossover_map(crossover_csv: Path, out_png: Path) -> None:
-    import matplotlib
-
-    matplotlib.use("Agg")
+    ensure_agg()
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -135,4 +135,3 @@ def plot_mechanism_crossover_map(crossover_csv: Path, out_png: Path) -> None:
     out_png.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(out_png, dpi=220, bbox_inches="tight")
     plt.close()
-

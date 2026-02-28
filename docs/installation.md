@@ -19,8 +19,8 @@ Install docs dependencies with `pip install -e ".[docs]"`. MkDocs is pinned to `
 
 ```bash
 python -m pip install -e ".[docs]"
-python -m mkdocs serve
-python -m mkdocs build --strict
+mkdocs serve
+mkdocs build --strict
 ```
 
 ## Validate your installation
