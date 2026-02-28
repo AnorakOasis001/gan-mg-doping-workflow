@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from gan_mg import __version__
+from gan_mg.artifacts import write_json
 from gan_mg.analysis.thermo import (
     boltzmann_diagnostics_from_energies,
     boltzmann_thermo_from_energies,
@@ -118,8 +119,7 @@ def log_profile(stage: str, start_time: float, num_configurations: int) -> None:
 
 
 def write_metrics_json(metrics_path: Path, metrics: dict[str, Any]) -> None:
-    metrics_path.parent.mkdir(parents=True, exist_ok=True)
-    metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    write_json(metrics_path, metrics)
 
 
 def _runtime_seconds(start_time: float) -> float:

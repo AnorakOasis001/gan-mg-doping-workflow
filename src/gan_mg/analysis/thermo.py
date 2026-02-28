@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
 
 import numpy as np
+
+from gan_mg.artifacts import write_thermo_vs_T_csv as write_thermo_vs_t_artifact_csv
 from numpy.typing import NDArray
 
 if TYPE_CHECKING:
@@ -581,22 +583,7 @@ def sweep_thermo_from_csv(
 
 
 def write_thermo_vs_T_csv(rows: list[ThermoSweepRow], out_csv: Path) -> None:
-    out_csv = Path(out_csv)
-    out_csv.parent.mkdir(parents=True, exist_ok=True)
-
-    fieldnames = [
-        "temperature_K",
-        "num_configurations",
-        "mixing_energy_min_eV",
-        "mixing_energy_avg_eV",
-        "partition_function",
-        "free_energy_mix_eV",
-    ]
-    with out_csv.open("w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=fieldnames)
-        w.writeheader()
-        for r in rows:
-            w.writerow(r)
+    write_thermo_vs_t_artifact_csv(rows, out_csv)
 
 
 def plot_thermo_vs_T(rows: list[ThermoSweepRow], out_png: Path) -> None:
