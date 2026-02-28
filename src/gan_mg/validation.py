@@ -95,10 +95,14 @@ def _validate_thermo_summary(payload: dict[str, Any], *, path: str) -> None:
 
 
 def _validate_provenance(payload: dict[str, Any], *, path: str) -> None:
-    require_key(payload, "schema_version", path=path)
+    require_string(require_key(payload, "schema_version", path=path), path=_join_path(path, "schema_version"))
+    git_commit = require_key(payload, "git_commit", path=path)
+    if git_commit is not None:
+        require_string(git_commit, path=_join_path(path, "git_commit"))
     require_string(require_key(payload, "python_version", path=path), path=_join_path(path, "python_version"))
     require_string(require_key(payload, "platform", path=path), path=_join_path(path, "platform"))
     require_object(require_key(payload, "cli_args", path=path), path=_join_path(path, "cli_args"))
+    require_string(require_key(payload, "input_hash", path=path), path=_join_path(path, "input_hash"))
 
 
 def _validate_metrics(payload: dict[str, Any], *, path: str) -> None:
@@ -147,6 +151,9 @@ def _validate_diagnostics(payload: dict[str, Any], *, path: str) -> None:
 def _validate_run_manifest(payload: dict[str, Any], *, path: str) -> None:
     require_string(require_key(payload, "config_sha256", path=path), path=_join_path(path, "config_sha256"))
     require_int(require_key(payload, "config_schema_version", path=path), path=_join_path(path, "config_schema_version"), minimum=1)
+    git_commit = require_key(payload, "git_commit", path=path)
+    if git_commit is not None:
+        require_string(git_commit, path=_join_path(path, "git_commit"))
     require_string(require_key(payload, "input_csv_sha256", path=path), path=_join_path(path, "input_csv_sha256"))
     require_string(require_key(payload, "package_version", path=path), path=_join_path(path, "package_version"))
     require_string(require_key(payload, "platform", path=path), path=_join_path(path, "platform"))
