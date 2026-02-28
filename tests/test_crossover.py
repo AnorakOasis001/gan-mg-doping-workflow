@@ -3,6 +3,8 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
+import pytest
+
 from gan_mg.analysis.crossover import build_mechanism_crossover_rows, derive_mechanism_crossover_dataset
 
 
@@ -54,6 +56,7 @@ def test_build_mechanism_crossover_rows_sign_and_preference() -> None:
 
 
 def test_derive_mechanism_crossover_dataset_writes_csv_and_plot(tmp_path: Path) -> None:
+    pytest.importorskip("matplotlib")
     run_dir = tmp_path / "runs" / "cross"
     _write_all_mechanisms(run_dir / "derived" / "all_mechanisms_gibbs_summary.csv")
 

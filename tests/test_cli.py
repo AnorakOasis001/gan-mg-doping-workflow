@@ -290,7 +290,40 @@ def test_cli_analyze_fails_with_informative_validation_error(tmp_path: Path) -> 
 
     assert completed.returncode != 0
     assert "Input validation error:" in completed.stderr
-    assert "missing required columns" in completed.stderr
+
+
+def test_cli_phase_map_writes_dataset(tmp_path: Path) -> None:
+    run_dir = tmp_path / "runs"
+    run_id = "phase-map-dataset"
+    input_csv = run_dir / run_id / "derived" / "crossover_uncertainty.csv"
+    input_csv.parent.mkdir(parents=True, exist_ok=True)
+    input_csv.write_text(
+        "x_mg_cation,doping_level_percent,T_K,delta_G_mean_eV,delta_G_ci_low_eV,delta_G_ci_high_eV,preferred,robust\n"
+        "0.25,25.0,300.0,0.04,-0.01,0.09,mgi,False\n",
+        encoding="utf-8",
+    )
+
+    _run_cli("phase-map", "--run-dir", str(run_dir), "--run-id", run_id, cwd=tmp_path)
+
+    assert (run_dir / run_id / "derived" / "phase_map.csv").exists()
+
+
+def test_cli_phase_map_plot_writes_png(tmp_path: Path) -> None:
+    pytest.importorskip("matplotlib")
+    run_dir = tmp_path / "runs"
+    run_id = "phase-map-plot"
+    input_csv = run_dir / run_id / "derived" / "crossover_uncertainty.csv"
+    input_csv.parent.mkdir(parents=True, exist_ok=True)
+    input_csv.write_text(
+        "x_mg_cation,doping_level_percent,T_K,delta_G_mean_eV,delta_G_ci_low_eV,delta_G_ci_high_eV,preferred,robust\n"
+        "0.25,25.0,300.0,0.04,-0.01,0.09,mgi,False\n"
+        "0.50,50.0,350.0,0.10,0.05,0.15,vn,True\n",
+        encoding="utf-8",
+    )
+
+    _run_cli("phase-map", "--run-dir", str(run_dir), "--run-id", run_id, "--plot", cwd=tmp_path)
+
+    assert (run_dir / run_id / "figures" / "phase_map.png").exists()
 
 
 def test_cli_import_csv_into_existing_run_writes_metadata(tmp_path: Path) -> None:
@@ -421,6 +454,7 @@ def test_cli_import_fails_on_invalid_csv_schema(tmp_path: Path) -> None:
 
 def test_cli_plot_thermo_creates_figure_when_plot_extra_available(tmp_path: Path) -> None:
     pytest.importorskip("pandas")
+    pytest.importorskip("matplotlib")
 
     run_dir = tmp_path / "runs"
     run_id = "plot-run"

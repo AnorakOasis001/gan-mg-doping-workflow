@@ -30,6 +30,7 @@ from gan_mg.demo.generate import generate_demo_csv
 from gan_mg.analysis.figures import regenerate_thermo_figure
 from gan_mg.analysis.crossover import derive_mechanism_crossover_dataset
 from gan_mg.analysis.crossover_uncertainty import derive_crossover_uncertainty_dataset
+from gan_mg.analysis.phase_map import derive_phase_map_dataset
 from gan_mg.import_results import import_results_to_run
 from gan_mg.science.mixing import derive_mixing_dataset
 from gan_mg.science.gibbs import derive_gibbs_summary_dataset
@@ -387,6 +388,20 @@ def build_uncertainty_parser(subparsers: argparse._SubParsersAction[argparse.Arg
     parser.add_argument("--nT", type=int, default=None)
     parser.add_argument("--n-bootstrap", type=int, default=200)
     parser.add_argument("--seed", type=int, default=0)
+    return parser
+
+
+def build_phase_map_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser(
+        "phase-map",
+        help="Build mechanism phase-map dataset and optional figure.",
+    )
+    add_run_args(parser)
+    parser.add_argument(
+        "--plot",
+        action="store_true",
+        help="Write phase map PNG (requires optional dependency: gan-mg-doping-workflow[plot]).",
+    )
     return parser
 
 
@@ -958,6 +973,39 @@ def handle_uncertainty(args: argparse.Namespace) -> None:
     logger.info("Wrote: %s", run_dir / "figures" / "crossover_map_uncertainty.png")
 
 
+def handle_phase_map(args: argparse.Namespace) -> None:
+    if args.run_id is None:
+        args.run_id = latest_run_id(Path(args.run_dir))
+
+    run_dir = Path(args.run_dir) / args.run_id
+    if not run_dir.exists():
+        raise SystemExit(f"Run not found: {run_dir}")
+
+    try:
+        phase_map_csv = derive_phase_map_dataset(run_dir)
+    except (ValueError, FileNotFoundError) as e:
+        raise SystemExit(f"Phase-map error: {e}") from e
+
+    logger.info("Wrote: %s", phase_map_csv)
+
+    if not args.plot:
+        return
+
+    try:
+        from gan_mg.viz.phase_map import plot_phase_map
+    except ModuleNotFoundError as e:
+        raise SystemExit(
+            "Plotting requires matplotlib. Install with\n"
+            "  python -m pip install -e '.[plot]'\n"
+            "or\n"
+            "  python -m pip install -e '.[dev,plot]'\n"
+        ) from e
+
+    out_png = run_dir / "figures" / "phase_map.png"
+    plot_phase_map(phase_map_csv, out_png)
+    logger.info("Wrote: %s", out_png)
+
+
 def handle_reproduce_overlay(args: argparse.Namespace) -> None:
     if args.run_id is None:
         args.run_id = latest_run_id(Path(args.run_dir))
@@ -1252,6 +1300,7 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser, ar
     build_mix_parser(subparsers)
     build_gibbs_parser(subparsers)
     build_uncertainty_parser(subparsers)
+    build_phase_map_parser(subparsers)
     build_reproduce_parser(subparsers)
     build_repropack_parser(subparsers)
     bench_parser = build_bench_parser(subparsers)
@@ -1302,6 +1351,8 @@ def main() -> None:
         handle_gibbs(args)
     elif args.command == "uncertainty":
         handle_uncertainty(args)
+    elif args.command == "phase-map":
+        handle_phase_map(args)
     elif args.command == "reproduce":
         if args.reproduce_command == "overlay":
             handle_reproduce_overlay(args)
