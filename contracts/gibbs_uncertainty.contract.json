@@ -1,0 +1,23 @@
+{
+  "dataset": "gibbs_uncertainty.csv",
+  "description": "Bootstrap uncertainty summary for Gibbs free energy and average mixing energy by mechanism, composition, and temperature.",
+  "required_columns": [
+    {"name": "mechanism_code", "type": "string"},
+    {"name": "x_mg_cation", "type": "float", "units": "fraction"},
+    {"name": "doping_level_percent", "type": "float", "units": "%"},
+    {"name": "T_K", "type": "float", "units": "K"},
+    {"name": "num_configurations", "type": "int"},
+    {"name": "free_energy_mixing_eV", "type": "float", "units": "eV"},
+    {"name": "free_energy_ci_low_eV", "type": "float", "units": "eV"},
+    {"name": "free_energy_ci_high_eV", "type": "float", "units": "eV"},
+    {"name": "mixing_energy_avg_eV", "type": "float", "units": "eV"},
+    {"name": "mixing_energy_ci_low_eV", "type": "float", "units": "eV"},
+    {"name": "mixing_energy_ci_high_eV", "type": "float", "units": "eV"},
+    {"name": "weight_max", "type": "float"},
+    {"name": "ess", "type": "float"}
+  ],
+  "optional_columns": [
+    {"name": "top_5_weight_sum", "type": "float"},
+    {"name": "n_mismatch_mean", "type": "float"}
+  ]
+}
