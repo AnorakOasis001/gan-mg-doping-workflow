@@ -1,5 +1,26 @@
 # Figure gallery
 
+## Quickstart demo
+
+Run a deterministic, fast end-to-end showcase with one command:
+
+```bash
+pip install -e ".[dev]"
+ganmg demo
+```
+
+This creates:
+
+- `runs/demo/derived/gibbs_summary.csv`
+- `runs/demo/derived/mechanism_crossover.csv`
+- `runs/demo/derived/phase_map.csv`
+- `runs/demo/derived/phase_boundary.csv`
+- `reports/demo/` (shareable report bundle + README summary)
+
+Use `ganmg demo --plot` to also emit figure assets (for example `runs/demo/figures/phase_map.png`) when matplotlib is installed.
+
+## Regenerate figure assets from an existing run
+
 Use the plotting CLI to regenerate key figures from an existing run:
 
 ```bash

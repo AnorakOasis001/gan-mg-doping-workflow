@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import importlib.util
 from importlib import metadata as importlib_metadata
 import json
@@ -28,7 +29,12 @@ from gan_mg.analysis.thermo import (
 )
 from gan_mg.demo.generate import generate_demo_csv
 from gan_mg.analysis.figures import regenerate_thermo_figure
-from gan_mg.analysis.crossover import derive_mechanism_crossover_dataset
+from gan_mg.analysis.crossover import (
+    CROSSOVER_COLUMNS,
+    build_mechanism_crossover_rows,
+    derive_mechanism_crossover_dataset,
+    plot_mechanism_crossover_map,
+)
 from gan_mg.analysis.crossover_uncertainty import derive_crossover_uncertainty_dataset
 from gan_mg.analysis.phase_boundary import derive_phase_boundary_dataset
 from gan_mg.analysis.phase_map import derive_phase_map_dataset
@@ -79,7 +85,15 @@ COMMON_FLOW_EXAMPLES = """Examples:
 
   # Regenerate deterministic golden fixtures
   python scripts/generate_golden.py
+
+  # Fast deterministic end-to-end demo run + report bundle
+  ganmg demo
 """
+
+DEMO_DEFAULT_RUN_ID = "demo"
+DEMO_DEFAULT_N = 16
+DEMO_DEFAULT_SEED = 17
+DEMO_DEFAULT_TEMPS = [300.0, 700.0, 1000.0]
 
 
 def get_git_commit() -> str | None:
@@ -504,6 +518,35 @@ def build_report_parser(subparsers: argparse._SubParsersAction[argparse.Argument
         "--force",
         action="store_true",
         help="Overwrite an existing report directory.",
+    )
+    return parser
+
+
+def build_demo_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser(
+        "demo",
+        help="Run a fast deterministic end-to-end showcase and build a report.",
+    )
+    parser.add_argument(
+        "--out-run-id",
+        default=DEMO_DEFAULT_RUN_ID,
+        help=f"Run id to create under --runs-dir (default: {DEMO_DEFAULT_RUN_ID}).",
+    )
+    parser.add_argument(
+        "--runs-dir",
+        type=Path,
+        default=Path("runs"),
+        help="Root directory to store demo run artifacts (default: runs).",
+    )
+    parser.add_argument(
+        "--plot",
+        action="store_true",
+        help="Also emit demo figures (requires optional matplotlib dependency).",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing run/report directories if present.",
     )
     return parser
 
@@ -1331,6 +1374,113 @@ def handle_report(args: argparse.Namespace) -> None:
         logger.info("Wrote zip: %s", zip_path)
 
 
+def _write_demo_crossover_csv(all_mechanisms_csv: Path, out_csv: Path) -> Path:
+    with all_mechanisms_csv.open("r", encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    crossover_rows = build_mechanism_crossover_rows(rows)
+    if not crossover_rows:
+        raise ValueError("No crossover rows were generated; ensure both vn and mgi mechanisms are present")
+
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+    with out_csv.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(CROSSOVER_COLUMNS))
+        writer.writeheader()
+        writer.writerows(crossover_rows)
+    return out_csv
+
+
+def handle_demo(args: argparse.Namespace) -> None:
+    run_root = Path(args.runs_dir)
+    run_id = str(args.out_run_id)
+    run_dir = run_root / run_id
+    report_dir = Path.cwd() / "reports" / run_id
+
+    if run_dir.exists():
+        if not args.force:
+            raise SystemExit(f"Run directory already exists: {run_dir}. Use --force to overwrite.")
+        shutil.rmtree(run_dir)
+
+    if report_dir.exists() and args.force:
+        shutil.rmtree(report_dir)
+
+    paths = init_run(run_root, run_id)
+    out_csv = paths.inputs_dir / "results.csv"
+    generate_demo_csv(n=DEMO_DEFAULT_N, seed=DEMO_DEFAULT_SEED, out_csv=out_csv, model_name="demo")
+
+    reference_path = paths.inputs_dir / "reference.json"
+    reference_path.write_text(
+        json.dumps(
+            {
+                "model": "gan_mg3n2",
+                "energies": {
+                    "E_GaN_fu": -10.0,
+                    "E_Mg3N2_fu": -5.0,
+                },
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    derive_per_structure_dataset(paths.run_dir)
+    derive_mixing_dataset(paths.run_dir, reference_path=reference_path)
+    derive_gibbs_summary_dataset(paths.run_dir, DEMO_DEFAULT_TEMPS)
+    crossover_path = _write_demo_crossover_csv(
+        paths.run_dir / "derived" / "all_mechanisms_gibbs_summary.csv",
+        paths.run_dir / "derived" / "mechanism_crossover.csv",
+    )
+    phase_map_path = derive_phase_map_dataset(paths.run_dir)
+    phase_boundary_path = derive_phase_boundary_dataset(paths.run_dir)
+
+    if args.plot:
+        try:
+            ensure_agg()
+            from gan_mg.viz.phase_map import plot_phase_map
+        except ModuleNotFoundError as e:
+            raise SystemExit(
+                "Plotting requires matplotlib. Install with\n"
+                "  python -m pip install -e '.[plot]'\n"
+                "or\n"
+                "  python -m pip install -e '.[dev,plot]'\n"
+            ) from e
+
+        plot_mechanism_crossover_map(crossover_path, paths.run_dir / "figures" / "crossover_map.png")
+        plot_phase_map(
+            phase_map_path,
+            paths.run_dir / "figures" / "phase_map.png",
+            boundary_csv=phase_boundary_path,
+        )
+
+    build_report(
+        run_dir=paths.run_dir,
+        out_dir=report_dir,
+        zip_out=False,
+        force=args.force,
+        include_raw=False,
+    )
+
+    write_run_meta(
+        paths.meta_path,
+        {
+            "command": "demo",
+            "run_id": run_id,
+            "n": DEMO_DEFAULT_N,
+            "seed": DEMO_DEFAULT_SEED,
+            "model": "demo",
+            "inputs_csv": str(out_csv),
+        },
+    )
+
+    logger.info("Demo complete.")
+    logger.info("Run directory: %s", paths.run_dir)
+    logger.info("Report directory: %s", report_dir)
+    logger.info("\nNext steps:")
+    logger.info("  - Inspect derived artifacts under %s", paths.run_dir / "derived")
+    logger.info("  - Open report README: %s", report_dir / "README.md")
+
+
 def handle_bench(args: argparse.Namespace, bench_parser: argparse.ArgumentParser) -> None:
     if args.bench_command != "thermo":
         bench_parser.print_help()
@@ -1434,6 +1584,7 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser, ar
     build_reproduce_parser(subparsers)
     build_repropack_parser(subparsers)
     build_report_parser(subparsers)
+    build_demo_parser(subparsers)
     bench_parser = build_bench_parser(subparsers)
 
     return parser, runs_parser, bench_parser
@@ -1493,6 +1644,8 @@ def main() -> None:
         handle_repropack(args)
     elif args.command == "report":
         handle_report(args)
+    elif args.command == "demo":
+        handle_demo(args)
     elif args.command == "bench":
         handle_bench(args, bench_parser)
     else:

@@ -1,0 +1,17 @@
+structure_id,mechanism,energy_eV,mg_count,ga_count,n_count
+demo_0000,Mgi+2MgGa,-0.278016,1,5,6
+demo_0001,Mgi+2MgGa,0.006691,2,4,6
+demo_0002,Mgi+2MgGa,0.160495,3,3,6
+demo_0003,MgGa+VN,-0.510375,1,5,6
+demo_0004,Mgi+2MgGa,-0.033893,2,4,6
+demo_0005,Mgi+2MgGa,-0.09578,3,3,6
+demo_0006,Mgi+2MgGa,-0.138617,1,5,6
+demo_0007,MgGa+VN,-0.689838,2,4,6
+demo_0008,MgGa+VN,-0.773063,3,3,6
+demo_0009,MgGa+VN,-0.415829,1,5,6
+demo_0010,MgGa+VN,-0.053605,2,4,6
+demo_0011,MgGa+VN,-0.547616,3,3,6
+demo_0012,MgGa+VN,-0.298397,1,5,6
+demo_0013,Mgi+2MgGa,-0.482565,2,4,6
+demo_0014,MgGa+VN,0.046328,3,3,6
+demo_0015,Mgi+2MgGa,0.145194,1,5,6
