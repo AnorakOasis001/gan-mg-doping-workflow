@@ -24,6 +24,7 @@ from gan_mg.analysis.thermo import (
 from gan_mg.demo.generate import generate_demo_csv
 from gan_mg.analysis.figures import regenerate_thermo_figure
 from gan_mg.import_results import import_results_to_run
+from gan_mg.science.mixing import derive_mixing_dataset
 from gan_mg.science.per_structure import derive_per_structure_dataset
 from gan_mg.services import analyze_run, sweep_run
 from gan_mg.validation import ValidationError, validate_output_file
@@ -305,6 +306,21 @@ def build_derive_parser(subparsers: argparse._SubParsersAction[argparse.Argument
         help="Build runs/<id>/derived/per_structure.csv from results + structure artifacts.",
     )
     add_run_args(parser)
+    return parser
+
+
+def build_mix_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser(
+        "mix",
+        help="Compute reference energies, mixing energies, and athermal summary CSVs.",
+    )
+    add_run_args(parser)
+    parser.add_argument(
+        "--reference",
+        type=Path,
+        default=None,
+        help="Path to reference config (.json or .toml). Defaults to runs/<id>/inputs/reference.json.",
+    )
     return parser
 
 def handle_generate(args: argparse.Namespace) -> None:
@@ -666,6 +682,23 @@ def handle_derive(args: argparse.Namespace) -> None:
 
     logger.info("Derived per-structure dataset: %s", out_path)
 
+
+def handle_mix(args: argparse.Namespace) -> None:
+    if args.run_id is None:
+        args.run_id = latest_run_id(Path(args.run_dir))
+
+    run_dir = Path(args.run_dir) / args.run_id
+    if not run_dir.exists():
+        raise SystemExit(f"Run not found: {run_dir}")
+
+    try:
+        mixing_path, summary_path = derive_mixing_dataset(run_dir, reference_path=args.reference)
+    except (ValueError, FileNotFoundError) as e:
+        raise SystemExit(f"Mix error: {e}") from e
+
+    logger.info("Derived mixing dataset: %s", mixing_path)
+    logger.info("Derived athermal summary: %s", summary_path)
+
 def handle_bench(args: argparse.Namespace, bench_parser: argparse.ArgumentParser) -> None:
     if args.bench_command != "thermo":
         bench_parser.print_help()
@@ -762,6 +795,7 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser, ar
     build_doctor_parser(subparsers)
     build_import_parser(subparsers)
     build_derive_parser(subparsers)
+    build_mix_parser(subparsers)
     bench_parser = build_bench_parser(subparsers)
 
     return parser, runs_parser, bench_parser
@@ -804,6 +838,8 @@ def main() -> None:
         handle_import(args)
     elif args.command == "derive":
         handle_derive(args)
+    elif args.command == "mix":
+        handle_mix(args)
     elif args.command == "bench":
         handle_bench(args, bench_parser)
     else:

@@ -1,0 +1,16 @@
+{
+  "dataset": "mixing_athermal_summary.csv",
+  "description": "Athermal (T->0) minimum mixing-energy curve summary by mechanism and composition.",
+  "required_columns": [
+    {"name": "mechanism_code", "type": "string"},
+    {"name": "x_mg_cation", "type": "float", "units": "fraction"},
+    {"name": "doping_level_percent", "type": "float", "units": "%"},
+    {"name": "num_structures", "type": "integer"},
+    {"name": "energy_mixing_min_eV", "type": "float", "units": "eV"},
+    {"name": "energy_mixing_min_eV_per_atom", "type": "float", "units": "eV/atom"},
+    {"name": "energy_mixing_min_eV_per_cation", "type": "float", "units": "eV/cation"},
+    {"name": "energy_mixing_mean_eV", "type": "float", "units": "eV"},
+    {"name": "energy_mixing_std_eV", "type": "float", "units": "eV"},
+    {"name": "dE_max_eV", "type": "float", "units": "eV"}
+  ]
+}
