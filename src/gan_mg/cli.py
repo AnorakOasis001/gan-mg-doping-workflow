@@ -25,6 +25,7 @@ from gan_mg.demo.generate import generate_demo_csv
 from gan_mg.analysis.figures import regenerate_thermo_figure
 from gan_mg.import_results import import_results_to_run
 from gan_mg.science.mixing import derive_mixing_dataset
+from gan_mg.science.gibbs import derive_gibbs_summary_dataset
 from gan_mg.science.per_structure import derive_per_structure_dataset
 from gan_mg.services import analyze_run, sweep_run
 from gan_mg.validation import ValidationError, validate_output_file
@@ -322,6 +323,50 @@ def build_mix_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPar
         help="Path to reference config (.json or .toml). Defaults to runs/<id>/inputs/reference.json.",
     )
     return parser
+
+
+def build_gibbs_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser(
+        "gibbs",
+        help="Compute Boltzmann Gibbs summaries from per_structure_mixing.csv and generate overlay plots.",
+    )
+    add_run_args(parser)
+    parser.add_argument(
+        "--temps",
+        default=None,
+        help="Comma-separated temperature list in K, e.g. 300,500,700,1000",
+    )
+    parser.add_argument("--T-min", type=float, default=None, dest="T_min")
+    parser.add_argument("--T-max", type=float, default=None, dest="T_max")
+    parser.add_argument("--nT", type=int, default=None)
+    return parser
+
+
+def _parse_temperatures(args: argparse.Namespace) -> list[float]:
+    if args.temps:
+        values = [token.strip() for token in str(args.temps).split(",") if token.strip()]
+        if not values:
+            raise SystemExit("--temps provided but empty")
+        temps = [float(v) for v in values]
+    elif args.T_min is not None or args.T_max is not None or args.nT is not None:
+        if args.T_min is None or args.T_max is None or args.nT is None:
+            raise SystemExit("Sweep form requires --T-min, --T-max, and --nT together")
+        if args.nT < 1:
+            raise SystemExit("--nT must be >= 1")
+        if args.nT == 1:
+            temps = [float(args.T_min)]
+        else:
+            temps = [
+                args.T_min + i * (args.T_max - args.T_min) / (args.nT - 1)
+                for i in range(args.nT)
+            ]
+    else:
+        raise SystemExit("Provide either --temps or sweep form --T-min/--T-max/--nT")
+
+    if any(t <= 0 for t in temps):
+        raise SystemExit("All temperatures must be > 0 K")
+
+    return sorted(float(t) for t in temps)
 
 def handle_generate(args: argparse.Namespace) -> None:
     stage_start = time.perf_counter()
@@ -699,6 +744,52 @@ def handle_mix(args: argparse.Namespace) -> None:
     logger.info("Derived mixing dataset: %s", mixing_path)
     logger.info("Derived athermal summary: %s", summary_path)
 
+
+def handle_gibbs(args: argparse.Namespace) -> None:
+    if args.run_id is None:
+        args.run_id = latest_run_id(Path(args.run_dir))
+
+    run_dir = Path(args.run_dir) / args.run_id
+    if not run_dir.exists():
+        raise SystemExit(f"Run not found: {run_dir}")
+
+    temperatures = _parse_temperatures(args)
+
+    try:
+        gibbs_path, all_mech_path = derive_gibbs_summary_dataset(run_dir, temperatures)
+    except FileNotFoundError as e:
+        raise SystemExit(
+            f"Gibbs error: {e} Please run `ganmg mix --run-id {args.run_id}` first."
+        ) from e
+    except ValueError as e:
+        raise SystemExit(f"Gibbs error: {e}") from e
+
+    logger.info("Derived Gibbs summary: %s", gibbs_path)
+    logger.info("Derived all-mechanisms Gibbs summary: %s", all_mech_path)
+
+    try:
+        from gan_mg.viz.overlay import (
+            plot_athermal_emin_vs_doping,
+            plot_overlay_dgmix_vs_doping_multi_t,
+        )
+    except ModuleNotFoundError as e:
+        raise SystemExit(
+            "Plotting requires matplotlib. Install with:\n"
+            "  python -m pip install -e '.[plot]'\n"
+            "or\n"
+            "  python -m pip install -e '.[dev,plot]'\n"
+        ) from e
+
+    overlay_path = run_dir / "figures" / "overlay_dGmix_vs_doping_multiT.png"
+    plot_overlay_dgmix_vs_doping_multi_t(all_mech_path, overlay_path)
+    logger.info("Wrote: %s", overlay_path)
+
+    athermal_csv = run_dir / "derived" / "mixing_athermal_summary.csv"
+    if athermal_csv.exists():
+        athermal_png = run_dir / "figures" / "athermal_Emixmin_vs_doping.png"
+        plot_athermal_emin_vs_doping(athermal_csv, athermal_png)
+        logger.info("Wrote: %s", athermal_png)
+
 def handle_bench(args: argparse.Namespace, bench_parser: argparse.ArgumentParser) -> None:
     if args.bench_command != "thermo":
         bench_parser.print_help()
@@ -796,6 +887,7 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser, ar
     build_import_parser(subparsers)
     build_derive_parser(subparsers)
     build_mix_parser(subparsers)
+    build_gibbs_parser(subparsers)
     bench_parser = build_bench_parser(subparsers)
 
     return parser, runs_parser, bench_parser
@@ -840,6 +932,8 @@ def main() -> None:
         handle_derive(args)
     elif args.command == "mix":
         handle_mix(args)
+    elif args.command == "gibbs":
+        handle_gibbs(args)
     elif args.command == "bench":
         handle_bench(args, bench_parser)
     else:
