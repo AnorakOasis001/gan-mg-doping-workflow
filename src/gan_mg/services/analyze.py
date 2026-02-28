@@ -9,10 +9,12 @@ from gan_mg.analysis.thermo import (
     ThermoResult,
     boltzmann_diagnostics_from_energies,
     boltzmann_thermo_from_csv,
+    write_thermo_txt,
+)
+from gan_mg.io.results_csv import (
     diagnostics_from_csv_streaming,
     read_energies_csv,
     thermo_from_csv_streaming,
-    write_thermo_txt,
 )
 from gan_mg.payloads import build_diagnostics_payload
 
