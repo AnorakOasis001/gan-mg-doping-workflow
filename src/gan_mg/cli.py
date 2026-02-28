@@ -48,6 +48,11 @@ from gan_mg.run import (
     make_run_id,
     write_run_meta,
 )
+from gan_mg.domain.run_index import (
+    find_runs,
+    latest_run_id as latest_discovered_run_id,
+    run_summary_to_dict,
+)
 
 
 LOG_FORMAT = "%(message)s"
@@ -234,8 +239,15 @@ def build_runs_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPa
     parser = subparsers.add_parser("runs", help="Inspect available runs.")
     parser.add_argument("--run-dir", default="runs", help="Root directory to store runs.")
     runs_sub = parser.add_subparsers(dest="runs_command")
-    runs_sub.add_parser("list", help="List all runs with metadata.")
-    runs_sub.add_parser("latest", help="Print latest run id.")
+    list_parser = runs_sub.add_parser("list", help="List all runs with metadata.")
+    list_parser.add_argument("--runs-dir", type=Path, default=None, help="Optional path to runs directory.")
+    list_parser.add_argument("--limit", type=int, default=None, help="Optional limit for newest N runs.")
+    list_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+
+    latest_parser = runs_sub.add_parser("latest", help="Print latest run id.")
+    latest_parser.add_argument("--runs-dir", type=Path, default=None, help="Optional path to runs directory.")
+    latest_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+
     show_parser = runs_sub.add_parser("show", help="Print run metadata and latest metrics.json.")
     show_parser.add_argument("--run-id", required=True, help="Run id to inspect.")
     return parser
@@ -743,30 +755,74 @@ def handle_doctor(args: argparse.Namespace) -> None:
 
 def handle_runs(args: argparse.Namespace, runs_parser: argparse.ArgumentParser) -> None:
     run_root = Path(args.run_dir) if hasattr(args, "run_dir") else Path("runs")
+    discovered_runs_dir = args.runs_dir if getattr(args, "runs_dir", None) is not None else run_root
+    repo_root = discovered_runs_dir.parent if discovered_runs_dir.name == "runs" else discovered_runs_dir
+
+    def _created_at_sort_value(summary: Any) -> tuple[float, str]:
+        created_at = summary.created_at
+        if isinstance(created_at, str):
+            try:
+                dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                return dt.timestamp(), summary.run_id
+            except ValueError:
+                pass
+        return summary.path.stat().st_mtime, summary.run_id
+
+    def _artifacts(summary: Any) -> str:
+        names: list[str] = []
+        if summary.has_metrics:
+            names.append("metrics")
+        if summary.has_sweep:
+            names.append("sweep")
+        if summary.has_gibbs:
+            names.append("gibbs")
+        if summary.has_uncertainty:
+            names.append("unc")
+        if summary.has_crossover:
+            names.append("cross")
+        if summary.has_phase_map:
+            names.append("phase")
+        return ",".join(names) if names else "-"
 
     if args.runs_command == "list":
-        runs = list_runs(run_root)
-        if not runs:
+        summaries = find_runs(repo_root=repo_root, runs_dir=discovered_runs_dir)
+        if args.limit is not None:
+            summaries = sorted(summaries, key=_created_at_sort_value, reverse=True)[: args.limit]
+
+        if args.json:
+            logger.info("%s", json.dumps([run_summary_to_dict(summary) for summary in summaries], indent=2))
+            return
+
+        if not summaries:
             logger.info("No runs found.")
             return
 
-        logger.info("%s", f"{'Run ID':<35} {'n':<5} {'seed':<5}")
-        logger.info("%s", "-" * 50)
-
-        runs = sorted(runs, key=lambda p: p.stat().st_mtime, reverse=True)
-
-        for run_dir in runs:
-            meta = load_run_meta(run_dir)
-            n = meta.get("n", "-")
-            seed = meta.get("seed", "-")
-            logger.info("%s", f"{run_dir.name:<35} {n:<5} {seed:<5}")
+        logger.info("%s", f"{'run_id':<35} {'created_at':<28} {'repro_hash':<12} artifacts")
+        logger.info("%s", "-" * 95)
+        for summary in summaries:
+            created_at = summary.created_at or "-"
+            repro_hash = (summary.reproducibility_hash or "-")[:12]
+            logger.info("%s", f"{summary.run_id:<35} {created_at:<28} {repro_hash:<12} {_artifacts(summary)}")
 
     elif args.runs_command == "latest":
-        try:
-            latest = latest_run_id(run_root)
-            logger.info("%s", latest)
-        except FileNotFoundError:
+        latest = latest_discovered_run_id(repo_root=repo_root, runs_dir=discovered_runs_dir)
+        if latest is None:
             logger.info("No runs found.")
+            return
+
+        if args.json:
+            summaries = find_runs(repo_root=repo_root, runs_dir=discovered_runs_dir)
+            latest_summary = next((summary for summary in summaries if summary.run_id == latest), None)
+            payload: dict[str, Any] = {
+                "run_id": latest,
+                "run_path": str(discovered_runs_dir / latest),
+            }
+            if latest_summary is not None:
+                payload["summary"] = run_summary_to_dict(latest_summary)
+            logger.info("%s", json.dumps(payload, indent=2))
+            return
+
+        logger.info("%s", latest)
 
     elif args.runs_command == "show":
         run_dir = run_root / args.run_id
