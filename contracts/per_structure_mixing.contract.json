@@ -1,0 +1,25 @@
+{
+  "dataset": "per_structure_mixing.csv",
+  "description": "Per-structure reference and mixing energies for Mg-doped GaN configurations.",
+  "required_columns": [
+    {"name": "structure_id", "type": "string"},
+    {"name": "mechanism_code", "type": "string"},
+    {"name": "mechanism_label", "type": "string"},
+    {"name": "energy_total_eV", "type": "float", "units": "eV"},
+    {"name": "energy_reference_eV", "type": "float", "units": "eV"},
+    {"name": "energy_mixing_eV", "type": "float", "units": "eV"},
+    {"name": "energy_mixing_eV_per_atom", "type": "float", "units": "eV/atom"},
+    {"name": "energy_mixing_eV_per_cation", "type": "float", "units": "eV/cation"},
+    {"name": "dE_eV", "type": "float", "units": "eV"},
+    {"name": "dE_eV_per_atom", "type": "float", "units": "eV/atom"},
+    {"name": "dE_eV_per_cation", "type": "float", "units": "eV/cation"},
+    {"name": "mg_count", "type": "integer", "units": "atoms"},
+    {"name": "ga_count", "type": "integer", "units": "atoms"},
+    {"name": "n_count", "type": "integer", "units": "atoms"},
+    {"name": "site_count_total", "type": "integer", "units": "atoms"},
+    {"name": "x_mg_cation", "type": "float", "units": "fraction"},
+    {"name": "doping_level_percent", "type": "float", "units": "%"},
+    {"name": "n_mismatch", "type": "float", "units": "atoms"},
+    {"name": "relaxed_structure_ref", "type": "string"}
+  ]
+}
