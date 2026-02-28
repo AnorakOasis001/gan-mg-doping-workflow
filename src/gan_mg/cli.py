@@ -24,6 +24,7 @@ from gan_mg.analysis.thermo import (
 from gan_mg.demo.generate import generate_demo_csv
 from gan_mg.analysis.figures import regenerate_thermo_figure
 from gan_mg.import_results import import_results_to_run
+from gan_mg.science.per_structure import derive_per_structure_dataset
 from gan_mg.services import analyze_run, sweep_run
 from gan_mg.validation import ValidationError, validate_output_file
 from gan_mg.run import (
@@ -295,6 +296,16 @@ def build_import_parser(subparsers: argparse._SubParsersAction[argparse.Argument
     )
     return parser
 
+
+
+
+def build_derive_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser(
+        "derive",
+        help="Build runs/<id>/derived/per_structure.csv from results + structure artifacts.",
+    )
+    add_run_args(parser)
+    return parser
 
 def handle_generate(args: argparse.Namespace) -> None:
     stage_start = time.perf_counter()
@@ -638,6 +649,23 @@ def _synthetic_energies(n: int, seed: int) -> list[float]:
     ]
 
 
+
+
+def handle_derive(args: argparse.Namespace) -> None:
+    if args.run_id is None:
+        args.run_id = latest_run_id(Path(args.run_dir))
+
+    run_dir = Path(args.run_dir) / args.run_id
+    if not run_dir.exists():
+        raise SystemExit(f"Run not found: {run_dir}")
+
+    try:
+        out_path = derive_per_structure_dataset(run_dir)
+    except (ValueError, FileNotFoundError) as e:
+        raise SystemExit(f"Derive error: {e}") from e
+
+    logger.info("Derived per-structure dataset: %s", out_path)
+
 def handle_bench(args: argparse.Namespace, bench_parser: argparse.ArgumentParser) -> None:
     if args.bench_command != "thermo":
         bench_parser.print_help()
@@ -733,6 +761,7 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser, ar
     build_plot_parser(subparsers)
     build_doctor_parser(subparsers)
     build_import_parser(subparsers)
+    build_derive_parser(subparsers)
     bench_parser = build_bench_parser(subparsers)
 
     return parser, runs_parser, bench_parser
@@ -773,6 +802,8 @@ def main() -> None:
         handle_runs(args, runs_parser)
     elif args.command == "import":
         handle_import(args)
+    elif args.command == "derive":
+        handle_derive(args)
     elif args.command == "bench":
         handle_bench(args, bench_parser)
     else:

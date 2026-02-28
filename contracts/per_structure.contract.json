@@ -1,0 +1,17 @@
+{
+  "dataset": "per_structure.csv",
+  "description": "Derived per-structure composition + energy table for Mg-doped GaN thermodynamics.",
+  "required_columns": [
+    {"name": "structure_id", "type": "string"},
+    {"name": "mechanism_code", "type": "string", "allowed": ["vn", "mgi", "unknown"]},
+    {"name": "mechanism_label", "type": "string"},
+    {"name": "energy_total_eV", "type": "float", "units": "eV"},
+    {"name": "mg_count", "type": "integer", "units": "atoms"},
+    {"name": "ga_count", "type": "integer", "units": "atoms"},
+    {"name": "n_count", "type": "integer", "units": "atoms"},
+    {"name": "site_count_total", "type": "integer", "units": "atoms"},
+    {"name": "x_mg_cation", "type": "float", "units": "fraction"},
+    {"name": "doping_level_percent", "type": "float", "units": "%"},
+    {"name": "relaxed_structure_ref", "type": "string"}
+  ]
+}
