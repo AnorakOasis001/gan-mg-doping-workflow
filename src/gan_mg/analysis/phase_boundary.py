@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -15,6 +16,14 @@ PHASE_BOUNDARY_COLUMNS = (
 )
 
 
+
+
+def _coerce_float(value: Any) -> float:
+    if isinstance(value, (float, int)):
+        return float(value)
+    return float(str(value))
+
+
 def _coerce_bool(value: object) -> bool:
     if isinstance(value, bool):
         return value
@@ -26,7 +35,7 @@ def _coerce_bool(value: object) -> bool:
 
 def _build_robust_lookup(df: pd.DataFrame) -> dict[tuple[float, float], bool]:
     return {
-        (float(row.T_K), float(row.x_mg_cation)): _coerce_bool(row.robust)
+        (_coerce_float(row.T_K), _coerce_float(row.x_mg_cation)): _coerce_bool(row.robust)
         for row in df.itertuples(index=False)
     }
 
@@ -68,13 +77,13 @@ def derive_phase_boundary_dataset(run_dir: Path) -> Path:
             if mech_left == mech_right:
                 continue
 
-            x_left = float(left["x_mg_cation"])
-            x_right = float(right["x_mg_cation"])
+            x_left = _coerce_float(left["x_mg_cation"])
+            x_right = _coerce_float(right["x_mg_cation"])
             x_boundary = 0.5 * (x_left + x_right)
 
             if has_doping:
                 doping_level_percent = 0.5 * (
-                    float(left["doping_level_percent"]) + float(right["doping_level_percent"])
+                    _coerce_float(left["doping_level_percent"]) + _coerce_float(right["doping_level_percent"])
                 )
             else:
                 doping_level_percent = x_boundary * 100.0
@@ -82,21 +91,21 @@ def derive_phase_boundary_dataset(run_dir: Path) -> Path:
             if has_robust:
                 robust = _coerce_bool(left.get("robust")) and _coerce_bool(right.get("robust"))
             elif robust_lookup:
-                robust = robust_lookup.get((float(temp), x_left), False) and robust_lookup.get(
-                    (float(temp), x_right),
+                robust = robust_lookup.get((_coerce_float(temp), x_left), False) and robust_lookup.get(
+                    (_coerce_float(temp), x_right),
                     False,
                 )
             else:
                 robust = False
 
             if has_delta_g:
-                delta_g_at_boundary_eV = min(float(left["delta_G_eV"]), float(right["delta_G_eV"]))
+                delta_g_at_boundary_eV = min(_coerce_float(left["delta_G_eV"]), _coerce_float(right["delta_G_eV"]))
             else:
                 delta_g_at_boundary_eV = float("nan")
 
             boundary_rows.append(
                 {
-                    "T_K": float(temp),
+                    "T_K": _coerce_float(temp),
                     "x_boundary": x_boundary,
                     "doping_level_percent": doping_level_percent,
                     "mech_left": mech_left,
