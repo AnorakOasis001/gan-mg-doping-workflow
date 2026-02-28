@@ -7,16 +7,11 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from gan_mg.analysis.thermo import (
-    K_B_EV_PER_K,
-    LOGGER,
-    REQUIRED_RESULTS_COLUMNS,
-    LogSumExpAccumulator,
-    RunningStats,
-    ScaledExpSumAccumulator,
-    ThermoDiagnostics,
-    ThermoResult,
-)
+from gan_mg.science.constants import K_B_EV_PER_K
+from gan_mg.science.streaming import LogSumExpAccumulator, RunningStats, ScaledExpSumAccumulator
+from gan_mg.science.thermo import LOGGER, ThermoDiagnostics, ThermoResult
+
+REQUIRED_RESULTS_COLUMNS = ("structure_id", "mechanism", "energy_eV")
 
 if TYPE_CHECKING:
     import pandas as pd
