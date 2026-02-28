@@ -46,6 +46,13 @@ def plot_phase_map_preference(phase_map_csv: Path, out_png: Path) -> None:
 
     cmap = ListedColormap(["#bdbdbd", "#4c78a8", "#f58518"])
 
+    extent: tuple[float, float, float, float] = (
+        min(dop_values),
+        max(dop_values),
+        min(t_values),
+        max(t_values),
+    )
+
     plt.figure(figsize=(7.2, 5.5))
     plt.imshow(
         grid,
@@ -55,7 +62,7 @@ def plot_phase_map_preference(phase_map_csv: Path, out_png: Path) -> None:
         cmap=cmap,
         vmin=0,
         vmax=2,
-        extent=[min(dop_values), max(dop_values), min(t_values), max(t_values)],
+        extent=extent,
     )
     plt.xlabel("Mg doping (%)")
     plt.ylabel("Temperature (K)")

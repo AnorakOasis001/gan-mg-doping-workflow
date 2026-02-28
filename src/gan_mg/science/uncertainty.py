@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from numpy.typing import NDArray
 
 from gan_mg.science.constants import K_B_EV_PER_K
 
@@ -29,12 +30,12 @@ UNCERTAINTY_COLUMNS = (
 )
 
 
-def _stable_logsumexp(x: np.ndarray) -> float:
+def _stable_logsumexp(x: NDArray[np.float64]) -> float:
     m = float(np.max(x))
     return m + float(np.log(np.sum(np.exp(x - m))))
 
 
-def compute_weights(dE: np.ndarray, T: float, kB: float, top_k: int = 5) -> tuple[np.ndarray, float, float, float]:
+def compute_weights(dE: NDArray[np.float64], T: float, kB: float, top_k: int = 5) -> tuple[NDArray[np.float64], float, float, float]:
     if dE.size == 0:
         raise ValueError("dE must be non-empty")
     if T <= 0:
@@ -53,7 +54,7 @@ def compute_weights(dE: np.ndarray, T: float, kB: float, top_k: int = 5) -> tupl
 
 
 def bootstrap_gibbs_for_group(
-    dE: np.ndarray,
+    dE: NDArray[np.float64],
     Emin: float,
     T: float,
     kB: float,
