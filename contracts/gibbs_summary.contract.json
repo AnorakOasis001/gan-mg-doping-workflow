@@ -1,0 +1,15 @@
+{
+  "dataset": "gibbs_summary.csv",
+  "description": "Boltzmann Gibbs summary by mechanism, composition, and temperature from per-structure mixing microstates.",
+  "required_columns": [
+    {"name": "mechanism_code", "type": "string"},
+    {"name": "x_mg_cation", "type": "float", "units": "fraction"},
+    {"name": "doping_level_percent", "type": "float", "units": "%"},
+    {"name": "T_K", "type": "float", "units": "K"},
+    {"name": "num_configurations", "type": "integer"},
+    {"name": "energy_mixing_min_eV", "type": "float", "units": "eV"},
+    {"name": "logZ", "type": "float"},
+    {"name": "free_energy_mixing_eV", "type": "float", "units": "eV"},
+    {"name": "mixing_energy_avg_eV", "type": "float", "units": "eV"}
+  ]
+}
