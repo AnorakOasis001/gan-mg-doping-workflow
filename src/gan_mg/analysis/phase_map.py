@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 
@@ -23,11 +24,12 @@ _REQUIRED_PHASE_MAP_COLUMNS = ["T_K", "x_mg_cation", "doping_level_percent", "wi
 
 
 def _sorted_output(df: pd.DataFrame) -> pd.DataFrame:
-    return df.sort_values(_SORT_COLUMNS, ascending=True, kind="mergesort").reset_index(drop=True)
+    sorted_df = df.sort_values(_SORT_COLUMNS, ascending=True, kind="mergesort").reset_index(drop=True)
+    return cast(pd.DataFrame, sorted_df)
 
 
 def _from_crossover_uncertainty(path: Path) -> pd.DataFrame:
-    df = pd.read_csv(path)
+    df: pd.DataFrame = pd.read_csv(path)
     out = pd.DataFrame(
         {
             "T_K": df["T_K"].astype(float),
@@ -44,7 +46,7 @@ def _from_crossover_uncertainty(path: Path) -> pd.DataFrame:
 
 
 def _from_mechanism_crossover(path: Path) -> pd.DataFrame:
-    df = pd.read_csv(path)
+    df: pd.DataFrame = pd.read_csv(path)
     out = pd.DataFrame(
         {
             "T_K": df["T_K"].astype(float),
@@ -58,7 +60,7 @@ def _from_mechanism_crossover(path: Path) -> pd.DataFrame:
 
 
 def _from_gibbs_summary(path: Path) -> pd.DataFrame:
-    df = pd.read_csv(path)
+    df: pd.DataFrame = pd.read_csv(path)
     work = pd.DataFrame(
         {
             "T_K": df["T_K"].astype(float),
