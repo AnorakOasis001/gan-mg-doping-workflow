@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import os
 import subprocess
 import sys
@@ -110,6 +111,8 @@ def test_cli_gibbs_generates_summary_and_plots(tmp_path: Path) -> None:
     gibbs_path = run_path / "derived" / "gibbs_summary.csv"
     all_mech_path = run_path / "derived" / "all_mechanisms_gibbs_summary.csv"
     overlay_png = run_path / "figures" / "overlay_dGmix_vs_doping_multiT.png"
+    crossover_csv = run_path / "derived" / "mechanism_crossover.csv"
+    crossover_png = run_path / "figures" / "crossover_map.png"
 
     assert gibbs_path.exists() and gibbs_path.stat().st_size > 0
     assert all_mech_path.exists() and all_mech_path.stat().st_size > 0
@@ -127,8 +130,9 @@ def test_cli_gibbs_generates_summary_and_plots(tmp_path: Path) -> None:
     for row in cold_rows:
         assert float(row["free_energy_mixing_eV"]) == pytest.approx(float(row["energy_mixing_min_eV"]), abs=2e-4)
 
-    assert overlay_png.exists()
-    assert overlay_png.stat().st_size > 0
+    assert overlay_png.exists() and overlay_png.stat().st_size > 0
+    assert crossover_csv.exists() and crossover_csv.stat().st_size > 0
+    assert crossover_png.exists() and crossover_png.stat().st_size > 0
 
 
 def test_cli_gibbs_requires_mixing_input(tmp_path: Path) -> None:
@@ -162,3 +166,49 @@ def test_cli_gibbs_requires_mixing_input(tmp_path: Path) -> None:
 
     assert completed.returncode != 0
     assert "ganmg mix --run-id" in (completed.stderr + completed.stdout)
+
+
+def test_cli_reproduce_overlay_writes_manifest(tmp_path: Path) -> None:
+    pytest.importorskip("matplotlib")
+
+    run_dir = tmp_path / "runs"
+    run_id = "repro"
+    run_path = run_dir / run_id
+    _write_per_structure_mixing_csv(run_path / "derived" / "per_structure_mixing.csv")
+    (run_path / "derived" / "per_structure.csv").write_text("structure_id\nexample\n", encoding="utf-8")
+    (run_path / "inputs").mkdir(parents=True, exist_ok=True)
+    (run_path / "inputs" / "results.csv").write_text("structure_id,energy_eV\nexample,-1.0\n", encoding="utf-8")
+
+    reference_path = run_path / "inputs" / "reference.json"
+    reference_path.write_text(
+        '{"model":"gan_mg3n2","energies":{"E_GaN_fu":-10.0,"E_Mg3N2_fu":-5.0}}',
+        encoding="utf-8",
+    )
+
+    _run_cli(
+        "reproduce",
+        "overlay",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--reference",
+        str(reference_path),
+        "--temps",
+        "300,600",
+        cwd=tmp_path,
+    )
+
+    manifest_path = run_path / "derived" / "repro_manifest.json"
+    assert manifest_path.exists()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["run_id"] == run_id
+    assert manifest["reference"]["model"] == "gan_mg3n2"
+    assert manifest["temperatures_K"] == [300.0, 600.0]
+    assert sorted(manifest["inputs"].keys()) == [
+        "derived/per_structure.csv",
+        "derived/per_structure_mixing.csv",
+        "inputs/reference.json",
+        "inputs/results.csv",
+    ]
+    assert manifest["outputs"]
