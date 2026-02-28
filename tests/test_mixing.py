@@ -7,6 +7,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+from gan_mg.science.reference import load_reference_config
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -169,3 +173,19 @@ def test_mix_requires_reference_file(tmp_path: Path) -> None:
 
     assert completed.returncode != 0
     assert "Reference config not found" in completed.stderr or "Reference config not found" in completed.stdout
+
+
+def test_reference_loader_reports_missing_required_keys(tmp_path: Path) -> None:
+    cfg = tmp_path / "reference.json"
+    cfg.write_text(json.dumps({"model": "gan_mg3n2", "energies": {"E_GaN_fu": -5.0}}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"model=gan_mg3n2 is missing required energies: E_Mg3N2_fu"):
+        load_reference_config(cfg)
+
+
+def test_reference_loader_reports_missing_mu_keys(tmp_path: Path) -> None:
+    cfg = tmp_path / "reference.json"
+    cfg.write_text(json.dumps({"model": "chemical_potentials", "energies": {"mu_Ga": -1.0, "mu_N": -2.0}}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"model=chemical_potentials is missing required energies: mu_Mg"):
+        load_reference_config(cfg)

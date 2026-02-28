@@ -54,6 +54,19 @@ def _load_reference_payload(path: Path) -> dict[str, Any]:
     return payload
 
 
+def _missing_required_keys(energies: dict[str, Any], model: str) -> list[str]:
+    if model == "gan_mg3n2":
+        required = ["E_GaN_fu", "E_Mg3N2_fu"]
+    elif model == "linear_endmember":
+        required = ["E_GaN_fu"]
+    elif model == "chemical_potentials":
+        required = ["mu_Ga", "mu_Mg", "mu_N"]
+    else:
+        required = []
+
+    return [key for key in required if energies.get(key) is None]
+
+
 def load_reference_config(path: Path) -> tuple[str, ReferenceEnergies]:
     cfg = _load_reference_payload(Path(path))
     model = cfg.get("model")
@@ -65,24 +78,32 @@ def load_reference_config(path: Path) -> tuple[str, ReferenceEnergies]:
     if not isinstance(energies, dict):
         raise ValueError("reference config must define an object/table 'energies'")
 
-    def _num(name: str, *, required: bool = False) -> float | None:
+    missing_keys = _missing_required_keys(energies, model)
+    if missing_keys:
+        missing_str = ", ".join(missing_keys)
+        raise ValueError(f"model={model} is missing required energies: {missing_str}")
+
+    def _optional_num(name: str) -> float | None:
         value = energies.get(name)
         if value is None:
-            if required:
-                raise ValueError(f"reference energies is missing required value '{name}'")
             return None
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ValueError(f"reference energy '{name}' must be numeric")
         return float(value)
 
+    e_gan = _optional_num("E_GaN_fu")
+    if e_gan is None:
+        # guarded by required-key validation above
+        raise ValueError(f"model={model} is missing required energies: E_GaN_fu")
+
     reference = ReferenceEnergies(
-        E_GaN_fu=_num("E_GaN_fu", required=True),
-        E_Mg3N2_fu=_num("E_Mg3N2_fu"),
-        E_Mg_metal_atom=_num("E_Mg_metal_atom"),
-        E_Ga_metal_atom=_num("E_Ga_metal_atom"),
-        mu_Ga=_num("mu_Ga"),
-        mu_Mg=_num("mu_Mg"),
-        mu_N=_num("mu_N"),
+        E_GaN_fu=e_gan,
+        E_Mg3N2_fu=_optional_num("E_Mg3N2_fu"),
+        E_Mg_metal_atom=_optional_num("E_Mg_metal_atom"),
+        E_Ga_metal_atom=_optional_num("E_Ga_metal_atom"),
+        mu_Ga=_optional_num("mu_Ga"),
+        mu_Mg=_optional_num("mu_Mg"),
+        mu_N=_optional_num("mu_N"),
     )
     return model, reference
 
