@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import platform
 import subprocess
 from dataclasses import asdict
@@ -9,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from gan_mg import __version__
+from gan_mg.artifacts import write_json
 from gan_mg._toml import load_toml
 from gan_mg.analysis.thermo import (
     boltzmann_diagnostics_from_energies,
@@ -47,8 +47,7 @@ def _get_git_commit() -> str | None:
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_json(path, payload)
 
 
 def run_from_config(config_path: Path) -> None:
