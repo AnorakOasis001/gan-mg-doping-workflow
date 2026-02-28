@@ -18,21 +18,13 @@ from typing import Any
 from gan_mg import __version__
 from gan_mg.artifacts import write_json
 from gan_mg.analysis.thermo import (
-    boltzmann_diagnostics_from_energies,
     boltzmann_thermo_from_energies,
-    boltzmann_thermo_from_csv,
-    diagnostics_from_csv_streaming,
     plot_thermo_vs_T,
-    read_energies_csv,
-    sweep_thermo_from_csv,
-    thermo_from_csv_streaming,
-    write_thermo_txt,
-    write_thermo_vs_T_csv,
 )
 from gan_mg.demo.generate import generate_demo_csv
 from gan_mg.analysis.figures import regenerate_thermo_figure
 from gan_mg.import_results import import_results_to_run
-from gan_mg.payloads import build_diagnostics_payload, build_metrics_sweep_payload
+from gan_mg.services import analyze_run, sweep_run
 from gan_mg.validation import ValidationError, validate_output_file
 from gan_mg.run import (
     init_run,
@@ -360,75 +352,50 @@ def handle_analyze(args: argparse.Namespace) -> None:
         out_txt = Path("results") / "tables" / "demo_thermo.txt"
         diagnostics_path = Path("results") / "tables" / f"diagnostics_T{int(args.T)}.json"
 
+    timings: dict[str, float] = {}
+    if args.profile:
+        timings["runtime_s"] = _runtime_seconds(stage_start)
+
+    if args.run_id is not None:
+        metrics_path = run_dir / "outputs" / "metrics.json"
+    else:
+        metrics_path = Path("results") / "tables" / "metrics.json"
+
     try:
-        if args.chunksize is None:
-            result = boltzmann_thermo_from_csv(csv_path, T=args.T, energy_col=args.energy_col)
-        else:
-            result = thermo_from_csv_streaming(
-                csv_path=csv_path,
-                temperature_K=args.T,
-                energy_column=args.energy_col,
-                chunksize=args.chunksize,
-            )
+        reproducibility_hash = compute_reproducibility_hash(
+            input_csv=csv_path,
+            temperature_grid=[args.T],
+            code_version=__version__,
+        )
+        provenance = get_runtime_provenance(vars(args), reproducibility_hash)
+
+        artifacts = analyze_run(
+            csv_path=csv_path,
+            metrics_path=metrics_path,
+            thermo_path=out_txt,
+            temperature_K=args.T,
+            energy_col=args.energy_col,
+            chunksize=args.chunksize,
+            diagnostics=args.diagnostics,
+            diagnostics_path=diagnostics_path,
+            reproducibility_hash=reproducibility_hash,
+            created_at=_iso_utc_now(),
+            timings=timings if timings else None,
+            provenance=provenance,
+            include_reproducibility_hash=True,
+        )
     except FileNotFoundError as e:
         raise SystemExit(f"Input file not found: {csv_path} ({e})") from e
     except ValueError as e:
         raise SystemExit(f"Input validation error: {e}") from e
 
-    reproducibility_hash = compute_reproducibility_hash(
-        input_csv=csv_path,
-        temperature_grid=[args.T],
-        code_version=__version__,
-    )
-
-    timings: dict[str, float] = {}
-    if args.profile:
-        timings["runtime_s"] = _runtime_seconds(stage_start)
-
-    metrics: dict[str, Any] = {
-        "temperature_K": result.temperature_K,
-        "num_configurations": result.num_configurations,
-        "mixing_energy_min_eV": result.mixing_energy_min_eV,
-        "mixing_energy_avg_eV": result.mixing_energy_avg_eV,
-        "partition_function": result.partition_function,
-        "free_energy_mix_eV": result.free_energy_mix_eV,
-        "created_at": _iso_utc_now(),
-    }
-    if reproducibility_hash:
-        metrics["reproducibility_hash"] = reproducibility_hash
-    if timings:
-        metrics["timings"] = timings
-    metrics["provenance"] = get_runtime_provenance(vars(args), reproducibility_hash)
-
     if args.run_id is not None:
-        metrics_path = run_dir / "outputs" / "metrics.json"
-        write_metrics_json(metrics_path, metrics)
-
         meta = load_run_meta(run_dir)
         meta["reproducibility_hash"] = reproducibility_hash
         write_run_meta(run_dir / "run.json", meta)
-    else:
-        metrics_path = Path("results") / "tables" / "metrics.json"
-        write_metrics_json(metrics_path, metrics)
 
-    write_thermo_txt(result, out_txt)
-    if args.diagnostics:
-        if args.chunksize is None:
-            energies = read_energies_csv(csv_path, energy_col=args.energy_col)
-            diagnostics = boltzmann_diagnostics_from_energies(energies, T=args.T)
-        else:
-            diagnostics = diagnostics_from_csv_streaming(
-                csv_path=csv_path,
-                temperature_K=args.T,
-                energy_column=args.energy_col,
-                chunksize=args.chunksize,
-            )
-        diagnostics_payload = build_diagnostics_payload(
-            diagnostics,
-            get_runtime_provenance(vars(args), reproducibility_hash),
-        )
-        write_metrics_json(diagnostics_path, diagnostics_payload)
-        logger.info("Wrote: %s", diagnostics_path)
+    if args.diagnostics and artifacts.diagnostics_path is not None:
+        logger.info("Wrote: %s", artifacts.diagnostics_path)
 
     if _should_validate_output(args):
         _validate_output_or_exit(metrics_path, kind="metrics")
@@ -436,10 +403,10 @@ def handle_analyze(args: argparse.Namespace) -> None:
             _validate_output_or_exit(diagnostics_path, kind="diagnostics")
 
     logger.info("Wrote: %s", metrics_path)
-    logger.info("%s", out_txt.read_text(encoding="utf-8"))
+    logger.info("%s", artifacts.thermo_path.read_text(encoding="utf-8"))
     if args.profile:
         # Keep profile logging format stable for existing consumers/tests.
-        log_profile("analyze", stage_start, num_configurations=result.num_configurations)
+        log_profile("analyze", stage_start, num_configurations=artifacts.thermo_result.num_configurations)
 
 
 def handle_sweep(args: argparse.Namespace) -> None:
@@ -471,32 +438,33 @@ def handle_sweep(args: argparse.Namespace) -> None:
         code_version=__version__,
     )
 
-    try:
-        rows = sweep_thermo_from_csv(csv_path, t_values, energy_col=args.energy_col)
-    except ValueError as e:
-        raise SystemExit(f"Input validation error: {e}") from e
-
-    write_thermo_vs_T_csv(rows, out_csv)
-    logger.info("Wrote: %s", out_csv)
-
-    num_configurations = 0 if not rows else int(rows[0]["num_configurations"])
-    timings: dict[str, float] = {}
-    if args.profile:
-        timings["runtime_s"] = _runtime_seconds(stage_start)
-
-    metrics = build_metrics_sweep_payload(
-        rows,
-        reproducibility_hash=reproducibility_hash,
-        created_at=_iso_utc_now(),
-        timings=timings if timings else None,
-    )
-
     if args.csv is None:
         metrics_path = run_dir / "outputs" / "metrics_sweep.json"
     else:
         metrics_path = Path("results") / "tables" / "metrics_sweep.json"
-    write_metrics_json(metrics_path, metrics)
-    logger.info("Wrote: %s", metrics_path)
+
+    timings: dict[str, float] = {}
+    if args.profile:
+        timings["runtime_s"] = _runtime_seconds(stage_start)
+
+    try:
+        artifacts = sweep_run(
+            csv_path=csv_path,
+            t_values=t_values,
+            energy_col=args.energy_col,
+            thermo_vs_t_path=out_csv,
+            metrics_sweep_path=metrics_path,
+            reproducibility_hash=reproducibility_hash,
+            created_at=_iso_utc_now(),
+            timings=timings if timings else None,
+        )
+    except ValueError as e:
+        raise SystemExit(f"Input validation error: {e}") from e
+
+    logger.info("Wrote: %s", artifacts.thermo_vs_t_path)
+    logger.info("Wrote: %s", artifacts.metrics_sweep_path)
+
+    num_configurations = 0 if not artifacts.rows else int(artifacts.rows[0]["num_configurations"])
 
     if args.csv is None:
         meta = load_run_meta(run_dir)
@@ -505,7 +473,7 @@ def handle_sweep(args: argparse.Namespace) -> None:
 
     if args.plot:
         try:
-            plot_thermo_vs_T(rows, out_png)
+            plot_thermo_vs_T(artifacts.rows, out_png)
             logger.info("Wrote: %s", out_png)
         except ModuleNotFoundError as e:
             raise SystemExit(
