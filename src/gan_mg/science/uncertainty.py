@@ -29,12 +29,9 @@ UNCERTAINTY_COLUMNS = (
 )
 
 
-def _stable_logsumexp(x: np.ndarray[Any, Any]) -> float:
-    m = float(np.max(x))
-    return m + float(np.log(np.sum(np.exp(x - m))))
+def _stable_logsumexp(x: np.ndarray) -> float:
 
-
-def compute_weights(dE: np.ndarray[Any, Any], T: float, kB: float, top_k: int = 5) -> tuple[np.ndarray[Any, Any], float, float, float]:
+def compute_weights(dE: np.ndarray, T: float, kB: float, top_k: int = 5) -> tuple[np.ndarray, float, float, float]:
     if dE.size == 0:
         raise ValueError("dE must be non-empty")
     if T <= 0:
@@ -53,7 +50,7 @@ def compute_weights(dE: np.ndarray[Any, Any], T: float, kB: float, top_k: int = 
 
 
 def bootstrap_gibbs_for_group(
-    dE: np.ndarray[Any, Any],
+    dE: np.ndarray,
     Emin: float,
     T: float,
     kB: float,

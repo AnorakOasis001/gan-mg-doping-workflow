@@ -390,11 +390,6 @@ def build_uncertainty_parser(subparsers: argparse._SubParsersAction[argparse.Arg
     parser.add_argument("--seed", type=int, default=0)
     return parser
 
-
-
-
-
-
 def build_phase_map_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> argparse.ArgumentParser:
     parser = subparsers.add_parser(
         "phase-map",
@@ -967,9 +962,6 @@ def handle_uncertainty(args: argparse.Namespace) -> None:
     crossover_uncertainty_csv = derive_crossover_uncertainty_dataset(run_dir)
     logger.info("Wrote: %s", crossover_uncertainty_csv)
     logger.info("Wrote: %s", run_dir / "figures" / "crossover_map_uncertainty.png")
-
-
-
 
 def handle_phase_map(args: argparse.Namespace) -> None:
     if args.run_id is None:
