@@ -40,6 +40,7 @@ python -m pip install -U pip
 python -m pip install -e ".[dev]"
 # Optional: docs toolchain
 python -m pip install -e ".[docs]"
+mkdocs serve
 
 python examples/minimal_end_to_end/run_example.py
 pytest -q

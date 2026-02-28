@@ -3,16 +3,15 @@ name: docs
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -31,35 +30,29 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[docs]" --no-build-isolation
 
-      - name: Debug docs inputs
-        run: |
-          ls -la docs
-          find docs -maxdepth 2 -iname "readme.md" -print
-          grep -n "^docs_dir:" mkdocs.yml || true
-          sed -n '1,80p' mkdocs.yml
-
-      - name: Remove conflicting docs README if generated
-        run: |
-          rm -f docs/README.md docs/readme.md
-
       - name: Build MkDocs site
         run: mkdocs build --strict
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
       - name: Upload artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
   deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
     steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
