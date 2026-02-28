@@ -41,14 +41,21 @@ def generate_demo_csv(n: int, seed: int, out_csv: Path, model_name: str = "demo"
     model = resolve_model(model_name=model_name, seed=seed)
     energies_eV = model.evaluate(configs)
 
-    rows = [
-        {
-            "structure_id": cfg.structure_id,
-            "mechanism": cfg.mechanism,
-            "energy_eV": energy,
-        }
-        for cfg, energy in zip(configs, energies_eV, strict=True)
-    ]
+    rows = []
+    for idx, (cfg, energy) in enumerate(zip(configs, energies_eV, strict=True)):
+        mg_count = 1 + (idx % 3)
+        ga_count = 6 - mg_count
+        n_count = 6
+        rows.append(
+            {
+                "structure_id": cfg.structure_id,
+                "mechanism": cfg.mechanism,
+                "energy_eV": energy,
+                "mg_count": mg_count,
+                "ga_count": ga_count,
+                "n_count": n_count,
+            }
+        )
 
     with out_csv.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
