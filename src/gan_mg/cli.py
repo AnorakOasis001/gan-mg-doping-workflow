@@ -54,6 +54,7 @@ from gan_mg.domain.run_index import (
     latest_run_id as latest_discovered_run_id,
     run_summary_to_dict,
 )
+from gan_mg.domain.report import build_report
 
 
 LOG_FORMAT = "%(message)s"
@@ -475,6 +476,38 @@ def build_repropack_parser(subparsers: argparse._SubParsersAction[argparse.Argum
         help="With --zip, remove the unpacked folder after creating the zip archive.",
     )
     return parser
+
+
+def build_report_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser(
+        "report",
+        help="Export a shareable run report bundle.",
+    )
+    add_run_args(parser)
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Destination report directory (default: reports/<run-id>).",
+    )
+    parser.add_argument(
+        "--zip",
+        action="store_true",
+        help="Also write reports/<run-id>.zip next to the report directory.",
+    )
+    parser.add_argument(
+        "--include-raw",
+        action="store_true",
+        help="Include source CSV input if it can be inferred from provenance.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite an existing report directory.",
+    )
+    return parser
+
+
 def _parse_temperatures(args: argparse.Namespace) -> list[float]:
     temps_arg = getattr(args, "temps", None)
     t_min = getattr(args, "T_min", None)
@@ -1271,6 +1304,33 @@ def handle_repropack(args: argparse.Namespace) -> None:
             logger.info("Removed unpacked repro pack directory: %s", destination_root)
 
 
+def handle_report(args: argparse.Namespace) -> None:
+    if args.run_id is None:
+        args.run_id = latest_run_id(Path(args.run_dir))
+
+    run_dir = Path(args.run_dir) / args.run_id
+    if not run_dir.exists():
+        raise SystemExit(f"Run not found: {run_dir}")
+
+    repo_root = Path.cwd()
+    report_dir = args.out if args.out is not None else (repo_root / "reports" / args.run_id)
+
+    try:
+        out_dir, zip_path = build_report(
+            run_dir=run_dir,
+            out_dir=Path(report_dir),
+            zip_out=args.zip,
+            force=args.force,
+            include_raw=args.include_raw,
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    logger.info("Wrote report: %s", out_dir)
+    if zip_path is not None:
+        logger.info("Wrote zip: %s", zip_path)
+
+
 def handle_bench(args: argparse.Namespace, bench_parser: argparse.ArgumentParser) -> None:
     if args.bench_command != "thermo":
         bench_parser.print_help()
@@ -1373,6 +1433,7 @@ def build_parser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser, ar
     build_phase_map_parser(subparsers)
     build_reproduce_parser(subparsers)
     build_repropack_parser(subparsers)
+    build_report_parser(subparsers)
     bench_parser = build_bench_parser(subparsers)
 
     return parser, runs_parser, bench_parser
@@ -1430,6 +1491,8 @@ def main() -> None:
             parser.print_help()
     elif args.command == "repropack":
         handle_repropack(args)
+    elif args.command == "report":
+        handle_report(args)
     elif args.command == "bench":
         handle_bench(args, bench_parser)
     else:
