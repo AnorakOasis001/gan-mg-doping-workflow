@@ -22,6 +22,21 @@ PER_STRUCTURE_COLUMNS = (
     "relaxed_structure_ref",
 )
 
+_PROHIBITED_RAW_THERMO_FIELDS = {
+    "mixing_energy",
+    "mixing_energy_ev",
+    "energy_mixing_ev",
+    "gibbs",
+    "gibbs_energy",
+    "free_energy",
+    "free_energy_mix_ev",
+    "boltzmann_weight",
+    "partition_function",
+    "temperature_k",
+    "logz",
+    "log_z",
+}
+
 
 # Units:
 # - energy_total_eV: eV per relaxed supercell
@@ -45,6 +60,16 @@ def _load_csv_rows(path: Path) -> tuple[list[dict[str, str]], list[str]]:
         rows = [dict(row) for row in reader]
         headers = [] if reader.fieldnames is None else list(reader.fieldnames)
     return rows, headers
+
+
+def _assert_raw_results_boundary(headers: list[str]) -> None:
+    normalized = {header.strip().lower() for header in headers}
+    violations = sorted(field for field in normalized if field in _PROHIBITED_RAW_THERMO_FIELDS)
+    if violations:
+        raise ValueError(
+            "Canonical raw dataset boundary violation in inputs/results.csv: found derived thermodynamic "
+            f"field(s): {', '.join(violations)}. Raw inputs must contain only structure-level raw fields."
+        )
 
 
 def _require_nonempty(value: str | None, *, field: str, row_index: int) -> str:
@@ -196,6 +221,7 @@ def build_per_structure_rows(run_dir: Path) -> list[dict[str, Any]]:
         raise FileNotFoundError(f"results.csv not found: {results_path}")
 
     results_rows, headers = _load_csv_rows(results_path)
+    _assert_raw_results_boundary(headers)
     if not results_rows:
         raise ValueError("results.csv must contain at least one row")
 

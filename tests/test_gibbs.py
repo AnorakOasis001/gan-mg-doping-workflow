@@ -218,5 +218,8 @@ def test_cli_reproduce_overlay_writes_manifest(tmp_path: Path) -> None:
     assert "python_version" in manifest
     assert "platform" in manifest
     assert "gan_mg_version" in manifest
+    assert manifest["workflow_stage"] == "reproduce_overlay"
+    assert manifest["lineage"]["canonical_raw_dataset"] == "inputs/results.csv"
+    assert "derived/per_structure_mixing.csv" in manifest["lineage"]["derived_from"]["derived/gibbs_summary.csv"]
     assert "file_hashes" in manifest
     assert str((run_path / "derived" / "gibbs_summary.csv").resolve()) in manifest["file_hashes"]
