@@ -191,7 +191,7 @@ def write_results_csv(
             writer.writerow({k: row.get(k, "") for k in fieldnames})
 
 
-def import_results_to_run(run_dir: Path, source_path: Path) -> dict[str, Any]:
+def import_results_to_run(run_dir: Path, source_path: Path) -> dict[str, str]:
     run_dir = Path(run_dir)
     source_path = Path(source_path).expanduser().resolve()
     if not source_path.exists() or not source_path.is_file():
