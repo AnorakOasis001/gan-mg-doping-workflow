@@ -16,14 +16,22 @@ def _run_cli(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     src_path = str(REPO_ROOT / "src")
     env["PYTHONPATH"] = src_path if not env.get("PYTHONPATH") else f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
-    return subprocess.run(
-        [sys.executable, "-m", "gan_mg.cli", *args],
-        cwd=cwd,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    try:
+        return subprocess.run(
+            [sys.executable, "-m", "gan_mg.cli", *args],
+            cwd=cwd,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        print("CLI command failed:", " ".join(exc.cmd))
+        print("--- stdout ---")
+        print(exc.stdout or "")
+        print("--- stderr ---")
+        print(exc.stderr or "")
+        raise
 
 
 def _write_per_structure_mixing_csv(path: Path) -> None:

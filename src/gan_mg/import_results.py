@@ -12,6 +12,9 @@ from typing import Any
 from gan_mg.analysis.thermo import REQUIRED_RESULTS_COLUMNS
 from gan_mg.analysis.thermo import read_energies_csv
 
+RowValue = str | float
+CsvRow = dict[str, RowValue]
+
 _RELAXED_CONFIG_ALIASES: dict[str, tuple[str, ...]] = {
     "structure_id": ("structure_id", "config_id", "configuration_id", "relaxed_configuration_id", "id"),
     "mechanism": ("mechanism", "mechanism_label", "defect_mechanism", "channel"),
@@ -58,7 +61,7 @@ def _validate_csv_results_schema(csv_path: Path) -> tuple[list[dict[str, str]], 
     return rows, fieldnames
 
 
-def _canonicalize_relaxed_configuration_rows(rows: list[dict[str, str]], fieldnames: list[str]) -> list[dict[str, str]]:
+def _canonicalize_relaxed_configuration_rows(rows: list[dict[str, str]], fieldnames: list[str]) -> list[CsvRow]:
     normalized_to_original = {name.strip().lower(): name for name in fieldnames}
     resolved_cols: dict[str, str] = {}
 
@@ -74,9 +77,9 @@ def _canonicalize_relaxed_configuration_rows(rows: list[dict[str, str]], fieldna
         missing_str = ", ".join(missing)
         raise ValueError(f"CSV schema error: missing required columns: {missing_str}")
 
-    canonical_rows: list[dict[str, str]] = []
+    canonical_rows: list[CsvRow] = []
     for i, row in enumerate(rows, start=2):
-        canonical: dict[str, str] = {}
+        canonical: CsvRow = {}
         for key in REQUIRED_RESULTS_COLUMNS:
             raw = row.get(resolved_cols[key], "")
             value = "" if raw is None else str(raw).strip()
@@ -124,11 +127,11 @@ def _extract_energy_from_comment(comment: str) -> float | None:
     return None
 
 
-def extxyz_to_results_rows(extxyz_path: Path) -> list[dict[str, str | float]]:
+def extxyz_to_results_rows(extxyz_path: Path) -> list[CsvRow]:
     lines = extxyz_path.read_text(encoding="utf-8").splitlines()
     idx = 0
     frame = 0
-    rows: list[dict[str, str | float]] = []
+    rows: list[CsvRow] = []
 
     while idx < len(lines):
         natoms_line = lines[idx].strip()
@@ -174,7 +177,7 @@ def extxyz_to_results_rows(extxyz_path: Path) -> list[dict[str, str | float]]:
     return rows
 
 
-def write_results_csv(rows: list[dict[str, Any]], out_csv: Path, columns: tuple[str, ...] | None = None) -> None:
+def write_results_csv(rows: list[CsvRow], out_csv: Path, columns: tuple[str, ...] | None = None) -> None:
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = list(columns) if columns is not None else list(REQUIRED_RESULTS_COLUMNS)
     with out_csv.open("w", encoding="utf-8", newline="") as f:
