@@ -463,6 +463,12 @@ def build_reproduce_parser(subparsers: argparse._SubParsersAction[argparse.Argum
         required=True,
         help="Comma-separated temperature list in K, e.g. 300,500,700,1000",
     )
+    overlay.add_argument(
+        "--raw-csv",
+        type=Path,
+        default=None,
+        help="Optional raw relaxed_configurations/results CSV to ingest before stage derivation.",
+    )
 
     return parser
 
@@ -1159,6 +1165,11 @@ def handle_reproduce_overlay(args: argparse.Namespace) -> None:
     run_dir = Path(args.run_dir) / args.run_id
     if not run_dir.exists():
         raise SystemExit(f"Run not found: {run_dir}")
+
+    if args.raw_csv is not None:
+        metadata = import_results_to_run(run_dir=run_dir, source_path=Path(args.raw_csv))
+        logger.info("Imported source: %s", metadata["source_path"])
+        logger.info("Wrote canonical CSV: %s", metadata["results_csv"])
 
     per_structure_csv = run_dir / "derived" / "per_structure.csv"
     if not per_structure_csv.exists():

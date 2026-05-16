@@ -42,6 +42,47 @@ ganmg --config run_config.toml
 
 Outputs are written to `repro_out/results/tables/`.
 
+## Reproducing dissertation figures from canonical raw datasets
+
+Use one command to ingest a `relaxed_configurations.csv`-style raw file, run derive → mix → gibbs, emit overlay figures, and write provenance:
+
+```bash
+ganmg reproduce overlay \
+  --run-dir runs \
+  --run-id dissertation-repro \
+  --raw-csv relaxed_configurations.csv \
+  --reference configs/reference/gan_mg3n2.toml \
+  --temps 300,600,900,1200
+```
+
+Canonical flow:
+
+```
+relaxed_configurations.csv
+  -> runs/<id>/inputs/results.csv (canonicalized)
+  -> derived/per_structure.csv
+  -> derived/per_structure_mixing.csv
+  -> derived/gibbs_summary.csv + derived/all_mechanisms_gibbs_summary.csv
+  -> figures/overlay_dGmix_vs_doping_multiT.png
+  -> derived/repro_manifest.json
+```
+
+Expected artifact tree (subset):
+
+```text
+runs/dissertation-repro/
+  inputs/results.csv
+  derived/per_structure.csv
+  derived/per_structure_mixing.csv
+  derived/gibbs_summary.csv
+  derived/all_mechanisms_gibbs_summary.csv
+  derived/mechanism_crossover.csv
+  derived/repro_manifest.json
+  figures/overlay_dGmix_vs_doping_multiT.png
+```
+
+`repro_manifest.json` captures stage lineage, file hashes, temperatures, reference model payload, and environment metadata for reproducible reporting.
+
 ## Run manifest
 
 `run_manifest.json` records the reproducibility contract for config-driven runs.
