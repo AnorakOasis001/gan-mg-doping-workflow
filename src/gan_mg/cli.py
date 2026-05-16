@@ -1214,6 +1214,17 @@ def handle_reproduce_overlay(args: argparse.Namespace) -> None:
             "energies": {k: v for k, v in reference_energies.__dict__.items() if v is not None},
         },
         "temperatures_K": [float(t) for t in temperatures],
+        "workflow_stage": "reproduce_overlay",
+        "lineage": {
+            "canonical_raw_dataset": "inputs/results.csv",
+            "derived_from": {
+                "derived/per_structure.csv": ["inputs/results.csv", "inputs/structures.csv"],
+                "derived/per_structure_mixing.csv": ["derived/per_structure.csv", f"inputs/{Path(args.reference).name}"],
+                "derived/gibbs_summary.csv": ["derived/per_structure_mixing.csv"],
+                "derived/all_mechanisms_gibbs_summary.csv": ["derived/per_structure_mixing.csv"],
+                "derived/mechanism_crossover.csv": ["derived/all_mechanisms_gibbs_summary.csv"],
+            },
+        },
         "outputs": sorted(outputs),
         "file_hashes": file_hashes,
     }

@@ -12,6 +12,8 @@ All contracts currently use `schema_version: 1.0` and follow additive compatibil
 | `derived/crossover_uncertainty.csv` | `1.0` | `CROSSOVER_UNCERTAINTY_COLUMNS` from `gan_mg.analysis.crossover_uncertainty` | _(none)_ |
 | `derived/phase_map.csv` | `1.0` | `T_K`, `x_mg_cation`, `doping_level_percent`, `winner_mechanism`, `delta_G_eV` | `delta_G_ci_low_eV`, `delta_G_ci_high_eV`, `robust` |
 | `derived/phase_boundary.csv` | `1.0` | `PHASE_BOUNDARY_COLUMNS` from `gan_mg.analysis.phase_boundary` | _(none)_ |
+| `derived/per_structure.csv` | `1.0` | `PER_STRUCTURE_COLUMNS` from `gan_mg.science.per_structure` | _(none)_ |
+| `derived/per_structure_mixing.csv` | `1.0` | `PER_STRUCTURE_MIXING_COLUMNS` from `gan_mg.science.mixing` | _(none)_ |
 | `outputs/metrics.json` | `1.0` | `temperature_K`, `num_configurations`, `partition_function`, `free_energy_mix_eV` | `mixing_energy_min_eV`, `mixing_energy_avg_eV`, `created_at`, `reproducibility_hash`, `provenance` |
 | `outputs/diagnostics_T*.json` | `1.0` | `temperature_K`, `num_configurations`, `expected_energy_eV`, `energy_variance_eV2`, `energy_std_eV`, `p_min`, `effective_sample_size`, `logZ_shifted`, `logZ_absolute`, `notes` | `provenance` |
 | `derived/repro_manifest.json` | `1.0` | _(none; best-effort contract)_ | `created_at`, `reproducibility_hash`, `run_id`, `python_version`, `platform`, `git_commit`, `input_hash` |

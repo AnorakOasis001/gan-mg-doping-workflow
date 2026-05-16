@@ -9,6 +9,7 @@ This project treats reproducibility as a first-class software requirement.
 3. **Stable schema**: thermodynamic outputs use consistent field names.
 4. **Side-effect boundaries**: pure API functions are separated from CLI file I/O.
 5. **Cross-platform behavior**: smoke scripts and CLI are usable on Linux and Windows.
+6. **Canonical raw boundary**: `inputs/results.csv` (canonical alias for `relaxed_configurations.csv`) is raw-only and must not include derived thermodynamic fields.
 
 ## Why this matters
 

@@ -41,6 +41,24 @@ def _csv_fixture_for_contract(contract: CsvContract, tmp_path: Path) -> Path:
     if fixture is not None:
         return fixture
 
+    if contract.name == "derived/per_structure.csv":
+        fixture = tmp_path / "per_structure.csv"
+        fixture.write_text(
+            "structure_id,mechanism_code,mechanism_label,energy_total_eV,mg_count,ga_count,n_count,site_count_total,x_mg_cation,doping_level_percent,relaxed_structure_ref\n"
+            "s1,vn,MgGa+VN,-1.0,1,1,2,4,0.5,50.0,structures/s1.extxyz\n",
+            encoding="utf-8",
+        )
+        return fixture
+
+    if contract.name == "derived/per_structure_mixing.csv":
+        fixture = tmp_path / "per_structure_mixing.csv"
+        fixture.write_text(
+            "structure_id,mechanism_code,mechanism_label,energy_total_eV,energy_reference_eV,energy_mixing_eV,energy_mixing_eV_per_atom,energy_mixing_eV_per_cation,dE_eV,dE_eV_per_atom,dE_eV_per_cation,mg_count,ga_count,n_count,site_count_total,x_mg_cation,doping_level_percent,n_mismatch,relaxed_structure_ref\n"
+            "s1,vn,MgGa+VN,-1.0,-1.2,0.2,0.05,0.1,0.0,0.0,0.0,1,1,2,4,0.5,50.0,0.0,structures/s1.extxyz\n",
+            encoding="utf-8",
+        )
+        return fixture
+
     out = tmp_path / contract.name.replace("/", "_")
     out.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = list(contract.required_columns + contract.optional_columns)

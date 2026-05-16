@@ -7,6 +7,8 @@ from gan_mg.analysis.crossover_uncertainty import CROSSOVER_UNCERTAINTY_COLUMNS
 from gan_mg.analysis.phase_boundary import PHASE_BOUNDARY_COLUMNS
 from gan_mg.analysis.phase_map import PHASE_MAP_COLUMNS
 from gan_mg.science.gibbs import GIBBS_SUMMARY_COLUMNS
+from gan_mg.science.mixing import PER_STRUCTURE_MIXING_COLUMNS
+from gan_mg.science.per_structure import PER_STRUCTURE_COLUMNS
 from gan_mg.science.uncertainty import UNCERTAINTY_COLUMNS
 
 
@@ -61,6 +63,18 @@ PHASE_BOUNDARY_CSV_CONTRACT = CsvContract(
     name="derived/phase_boundary.csv",
     schema_version="1.0",
     required_columns=PHASE_BOUNDARY_COLUMNS,
+)
+
+PER_STRUCTURE_CSV_CONTRACT = CsvContract(
+    name="derived/per_structure.csv",
+    schema_version="1.0",
+    required_columns=PER_STRUCTURE_COLUMNS,
+)
+
+PER_STRUCTURE_MIXING_CSV_CONTRACT = CsvContract(
+    name="derived/per_structure_mixing.csv",
+    schema_version="1.0",
+    required_columns=PER_STRUCTURE_MIXING_COLUMNS,
 )
 
 METRICS_JSON_CONTRACT = JsonContract(
@@ -130,6 +144,8 @@ def all_csv_contracts() -> tuple[CsvContract, ...]:
         CROSSOVER_UNCERTAINTY_CSV_CONTRACT,
         PHASE_MAP_CSV_CONTRACT,
         PHASE_BOUNDARY_CSV_CONTRACT,
+        PER_STRUCTURE_CSV_CONTRACT,
+        PER_STRUCTURE_MIXING_CSV_CONTRACT,
     )
 
 

@@ -101,3 +101,37 @@ def test_cli_derive_creates_per_structure_csv(tmp_path: Path) -> None:
         "doping_level_percent",
         "relaxed_structure_ref",
     }
+
+
+def test_cli_derive_rejects_raw_dataset_with_derived_thermo_fields(tmp_path: Path) -> None:
+    import os
+    import subprocess
+    import sys
+
+    repo_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    src_path = str(repo_root / "src")
+    env["PYTHONPATH"] = src_path if not env.get("PYTHONPATH") else f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
+
+    run_id = "derive-invalid-raw-boundary"
+    run_dir = tmp_path / "runs"
+    run_path = run_dir / run_id
+    (run_path / "inputs").mkdir(parents=True)
+
+    with (run_path / "inputs" / "results.csv").open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["structure_id", "mechanism", "energy_eV", "free_energy_mix_eV"])
+        writer.writeheader()
+        writer.writerow(
+            {"structure_id": "s001", "mechanism": "MgGa+VN", "energy_eV": -1.10, "free_energy_mix_eV": -0.4}
+        )
+
+    proc = subprocess.run(
+        [sys.executable, "-m", "gan_mg.cli", "derive", "--run-dir", str(run_dir), "--run-id", run_id],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert proc.returncode != 0
+    assert "boundary violation" in (proc.stderr + proc.stdout)
