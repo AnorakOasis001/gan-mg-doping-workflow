@@ -17,6 +17,7 @@ _RELAXED_CONFIG_ALIASES: dict[str, tuple[str, ...]] = {
     "mechanism": ("mechanism", "mechanism_label", "defect_mechanism", "channel"),
     "energy_eV": ("energy_eV", "total_energy_eV", "relaxed_energy_eV", "energy"),
 }
+_OPTIONAL_RAW_COLUMNS = ("mg_count", "ga_count", "n_count", "relaxed_structure_ref")
 
 
 def _timestamp_utc_iso() -> str:
@@ -71,10 +72,7 @@ def _canonicalize_relaxed_configuration_rows(rows: list[dict[str, str]], fieldna
     missing = [key for key in REQUIRED_RESULTS_COLUMNS if key not in resolved_cols]
     if missing:
         missing_str = ", ".join(missing)
-        raise ValueError(
-            "CSV schema error: missing required canonical columns or relaxed_configurations aliases for: "
-            f"{missing_str}"
-        )
+        raise ValueError(f"CSV schema error: missing required columns: {missing_str}")
 
     canonical_rows: list[dict[str, str]] = []
     for i, row in enumerate(rows, start=2):
@@ -85,6 +83,13 @@ def _canonicalize_relaxed_configuration_rows(rows: list[dict[str, str]], fieldna
             if value == "":
                 raise ValueError(f"CSV schema error: row {i} has empty '{key}'.")
             canonical[key] = value
+        for optional_key in _OPTIONAL_RAW_COLUMNS:
+            source_col = normalized_to_original.get(optional_key)
+            if source_col is None:
+                continue
+            raw_optional = row.get(source_col, "")
+            if raw_optional is not None and str(raw_optional).strip() != "":
+                canonical[optional_key] = str(raw_optional).strip()
         try:
             float(canonical["energy_eV"])
         except ValueError as exc:
@@ -169,13 +174,14 @@ def extxyz_to_results_rows(extxyz_path: Path) -> list[dict[str, str | float]]:
     return rows
 
 
-def write_results_csv(rows: list[dict[str, Any]], out_csv: Path) -> None:
+def write_results_csv(rows: list[dict[str, Any]], out_csv: Path, columns: tuple[str, ...] | None = None) -> None:
     out_csv.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = list(columns) if columns is not None else list(REQUIRED_RESULTS_COLUMNS)
     with out_csv.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=list(REQUIRED_RESULTS_COLUMNS))
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         for row in rows:
-            writer.writerow({k: row[k] for k in REQUIRED_RESULTS_COLUMNS})
+            writer.writerow({k: row.get(k, "") for k in fieldnames})
 
 
 def import_results_to_run(run_dir: Path, source_path: Path) -> dict[str, Any]:
@@ -209,7 +215,8 @@ def import_results_to_run(run_dir: Path, source_path: Path) -> dict[str, Any]:
             results_csv = inputs_dir / "imported_results.csv"
         else:
             results_csv = canonical_csv
-        write_results_csv(rows, results_csv)
+        passthrough_columns = tuple(column for column in _OPTIONAL_RAW_COLUMNS if any(column in row for row in rows))
+        write_results_csv(rows, results_csv, columns=tuple(REQUIRED_RESULTS_COLUMNS) + passthrough_columns)
         # Reuse canonical CSV validation logic used by thermo analysis.
         read_energies_csv(results_csv, energy_col="energy_eV")
     elif ext in {".extxyz", ".xyz"}:
