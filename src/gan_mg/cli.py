@@ -1011,7 +1011,9 @@ def handle_mix(args: argparse.Namespace) -> None:
     logger.info("Derived athermal summary: %s", summary_path)
 
 
-def _write_overlay_related_figures(run_dir: Path, all_mech_path: Path) -> tuple[Path, Path, Path | None]:
+def _write_overlay_related_figures(
+    run_dir: Path, all_mech_path: Path, *, allow_missing_crossover: bool = False
+) -> tuple[Path, Path | None, Path | None, Path | None]:
     try:
         ensure_agg()
         from gan_mg.viz.overlay import (
@@ -1036,9 +1038,17 @@ def _write_overlay_related_figures(run_dir: Path, all_mech_path: Path) -> tuple[
         athermal_png = run_dir / "figures" / "athermal_Emixmin_vs_doping.png"
         plot_athermal_emin_vs_doping(athermal_csv, athermal_png)
 
-    crossover_csv, crossover_png = derive_mechanism_crossover_dataset(run_dir)
-    logger.info("Wrote: %s", crossover_csv)
-    return overlay_path, crossover_png, athermal_png
+    crossover_csv: Path | None = None
+    crossover_png: Path | None = None
+    try:
+        crossover_csv, crossover_png = derive_mechanism_crossover_dataset(run_dir)
+        logger.info("Wrote: %s", crossover_csv)
+    except ValueError as e:
+        if not allow_missing_crossover:
+            raise
+        logger.warning("Skipping crossover artifacts: %s", e)
+
+    return overlay_path, crossover_csv, crossover_png, athermal_png
 
 
 def handle_gibbs(args: argparse.Namespace) -> None:
@@ -1063,9 +1073,10 @@ def handle_gibbs(args: argparse.Namespace) -> None:
     logger.info("Derived Gibbs summary: %s", gibbs_path)
     logger.info("Derived all-mechanisms Gibbs summary: %s", all_mech_path)
 
-    overlay_path, crossover_png, athermal_png = _write_overlay_related_figures(run_dir, all_mech_path)
+    overlay_path, crossover_csv, crossover_png, athermal_png = _write_overlay_related_figures(run_dir, all_mech_path)
     logger.info("Wrote: %s", overlay_path)
-    logger.info("Wrote: %s", crossover_png)
+    if crossover_csv is not None and crossover_png is not None:
+        logger.info("Wrote: %s", crossover_png)
 
     if athermal_png is not None:
         logger.info("Wrote: %s", athermal_png)
@@ -1184,7 +1195,9 @@ def handle_reproduce_overlay(args: argparse.Namespace) -> None:
 
     temperatures = _parse_temperatures(args)
     gibbs_path, all_mech_path = derive_gibbs_summary_dataset(run_dir, temperatures)
-    overlay_path, crossover_png, athermal_png = _write_overlay_related_figures(run_dir, all_mech_path)
+    overlay_path, crossover_csv, crossover_png, athermal_png = _write_overlay_related_figures(
+        run_dir, all_mech_path, allow_missing_crossover=True
+    )
 
     reference_model, reference_energies = load_reference_config(Path(args.reference))
 
@@ -1192,9 +1205,11 @@ def handle_reproduce_overlay(args: argparse.Namespace) -> None:
         gibbs_path,
         all_mech_path,
         overlay_path,
-        run_dir / "derived" / "mechanism_crossover.csv",
-        crossover_png,
     ]
+    if crossover_csv is not None:
+        output_files.append(crossover_csv)
+    if crossover_png is not None:
+        output_files.append(crossover_png)
     if athermal_png is not None:
         output_files.append(athermal_png)
 

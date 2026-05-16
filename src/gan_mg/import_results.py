@@ -7,7 +7,7 @@ import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping, Sequence
 
 from gan_mg.analysis.thermo import REQUIRED_RESULTS_COLUMNS
 from gan_mg.analysis.thermo import read_energies_csv
@@ -177,7 +177,11 @@ def extxyz_to_results_rows(extxyz_path: Path) -> list[CsvRow]:
     return rows
 
 
-def write_results_csv(rows: list[CsvRow], out_csv: Path, columns: tuple[str, ...] | None = None) -> None:
+def write_results_csv(
+    rows: Sequence[Mapping[str, RowValue]],
+    out_csv: Path,
+    columns: tuple[str, ...] | None = None,
+) -> None:
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = list(columns) if columns is not None else list(REQUIRED_RESULTS_COLUMNS)
     with out_csv.open("w", encoding="utf-8", newline="") as f:
