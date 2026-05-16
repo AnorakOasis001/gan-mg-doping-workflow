@@ -680,3 +680,39 @@ def test_cli_repropack_requires_core_inputs(tmp_path: Path) -> None:
 
     assert completed.returncode != 0
     assert "Core input missing" in (completed.stderr + completed.stdout)
+
+
+def test_cli_import_relaxed_configurations_aliases_to_canonical_results(tmp_path: Path) -> None:
+    run_dir = tmp_path / "runs"
+    run_id = "import-relaxed"
+    source_csv = tmp_path / "relaxed_configurations.csv"
+    source_csv.write_text(
+        "\n".join(
+            [
+                "configuration_id,mechanism_label,total_energy_eV",
+                "cfg-1,mgi,-10.25",
+                "cfg-2,vn,-10.00",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    _run_cli(
+        "import",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--results",
+        str(source_csv),
+        cwd=tmp_path,
+    )
+
+    canonical = run_dir / run_id / "inputs" / "results.csv"
+    assert canonical.exists()
+    with canonical.open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert rows[0]["structure_id"] == "cfg-1"
+    assert rows[0]["mechanism"] == "mgi"
+    assert rows[0]["energy_eV"] == "-10.25"

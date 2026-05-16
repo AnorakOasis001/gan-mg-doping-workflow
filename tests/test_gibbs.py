@@ -16,14 +16,22 @@ def _run_cli(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     src_path = str(REPO_ROOT / "src")
     env["PYTHONPATH"] = src_path if not env.get("PYTHONPATH") else f"{src_path}{os.pathsep}{env['PYTHONPATH']}"
-    return subprocess.run(
-        [sys.executable, "-m", "gan_mg.cli", *args],
-        cwd=cwd,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    try:
+        return subprocess.run(
+            [sys.executable, "-m", "gan_mg.cli", *args],
+            cwd=cwd,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        print("CLI command failed:", " ".join(exc.cmd))
+        print("--- stdout ---")
+        print(exc.stdout or "")
+        print("--- stderr ---")
+        print(exc.stderr or "")
+        raise
 
 
 def _write_per_structure_mixing_csv(path: Path) -> None:
@@ -223,3 +231,112 @@ def test_cli_reproduce_overlay_writes_manifest(tmp_path: Path) -> None:
     assert "derived/per_structure_mixing.csv" in manifest["lineage"]["derived_from"]["derived/gibbs_summary.csv"]
     assert "file_hashes" in manifest
     assert str((run_path / "derived" / "gibbs_summary.csv").resolve()) in manifest["file_hashes"]
+
+
+def test_cli_reproduce_overlay_from_relaxed_configurations_csv(tmp_path: Path) -> None:
+    pytest.importorskip("matplotlib")
+    run_dir = tmp_path / "runs"
+    run_id = "repro-raw-csv"
+    run_path = run_dir / run_id
+    (run_path / "inputs").mkdir(parents=True, exist_ok=True)
+    (run_path / "structures").mkdir(parents=True, exist_ok=True)
+
+    raw_csv = tmp_path / "relaxed_configurations.csv"
+    raw_csv.write_text(
+        "\n".join(
+            [
+                "configuration_id,mechanism_label,total_energy_eV,mg_count,ga_count,n_count",
+                "cfg-001,mgi,-11.0,1,2,3",
+                "cfg-002,vn,-10.5,0,3,3",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    reference_path = run_path / "inputs" / "reference.toml"
+    reference_path.write_text(
+        "\n".join(
+            [
+                'model = "gan_mg3n2"',
+                "[energies]",
+                "E_GaN_fu = -10.0",
+                "E_Mg3N2_fu = -5.0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    _run_cli(
+        "reproduce",
+        "overlay",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--raw-csv",
+        str(raw_csv),
+        "--reference",
+        str(reference_path),
+        "--temps",
+        "300,600",
+        cwd=tmp_path,
+    )
+
+    assert (run_path / "inputs" / "results.csv").exists()
+    assert (run_path / "derived" / "per_structure.csv").exists()
+    assert (run_path / "derived" / "per_structure_mixing.csv").exists()
+    assert (run_path / "derived" / "gibbs_summary.csv").exists()
+    assert (run_path / "derived" / "repro_manifest.json").exists()
+    overlay_png = run_path / "figures" / "overlay_dGmix_vs_doping_multiT.png"
+    assert overlay_png.exists()
+    assert overlay_png.stat().st_size > 0
+
+
+def test_cli_reproduce_overlay_raw_csv_skips_crossover_when_absent(tmp_path: Path) -> None:
+    pytest.importorskip("matplotlib")
+    run_dir = tmp_path / "runs"
+    run_id = "repro-raw-csv-single-mech"
+    run_path = run_dir / run_id
+    (run_path / "inputs").mkdir(parents=True, exist_ok=True)
+
+    raw_csv = tmp_path / "relaxed_configurations.csv"
+    raw_csv.write_text(
+        "\n".join(
+            [
+                "configuration_id,mechanism_label,total_energy_eV,mg_count,ga_count,n_count",
+                "cfg-001,vn,-11.0,1,2,3",
+                "cfg-002,vn,-10.5,0,3,3",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    reference_path = run_path / "inputs" / "reference.toml"
+    reference_path.write_text(
+        'model = "gan_mg3n2"\n[energies]\nE_GaN_fu = -10.0\nE_Mg3N2_fu = -5.0\n',
+        encoding="utf-8",
+    )
+
+    _run_cli(
+        "reproduce",
+        "overlay",
+        "--run-dir",
+        str(run_dir),
+        "--run-id",
+        run_id,
+        "--raw-csv",
+        str(raw_csv),
+        "--reference",
+        str(reference_path),
+        "--temps",
+        "300,600",
+        cwd=tmp_path,
+    )
+
+    assert (run_path / "derived" / "gibbs_summary.csv").exists()
+    assert (run_path / "derived" / "repro_manifest.json").exists()
+    assert (run_path / "figures" / "overlay_dGmix_vs_doping_multiT.png").exists()
+    assert not (run_path / "derived" / "mechanism_crossover.csv").exists()
