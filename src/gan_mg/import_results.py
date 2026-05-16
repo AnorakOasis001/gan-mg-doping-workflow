@@ -7,13 +7,13 @@ import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Mapping, Sequence, TypeAlias
 
 from gan_mg.analysis.thermo import REQUIRED_RESULTS_COLUMNS
 from gan_mg.analysis.thermo import read_energies_csv
 
-RowValue = str | float
-CsvRow = dict[str, RowValue]
+RowValue: TypeAlias = str | float
+CanonicalRow: TypeAlias = dict[str, RowValue]
 
 _RELAXED_CONFIG_ALIASES: dict[str, tuple[str, ...]] = {
     "structure_id": ("structure_id", "config_id", "configuration_id", "relaxed_configuration_id", "id"),
@@ -27,7 +27,7 @@ def _timestamp_utc_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _validate_csv_results_schema(csv_path: Path) -> tuple[list[dict[str, str]], list[str]]:
+def _validate_csv_results_schema(csv_path: Path) -> tuple[list[CanonicalRow], list[str]]:
     with csv_path.open("r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
         rows = [dict(row) for row in reader]
@@ -61,7 +61,7 @@ def _validate_csv_results_schema(csv_path: Path) -> tuple[list[dict[str, str]], 
     return rows, fieldnames
 
 
-def _canonicalize_relaxed_configuration_rows(rows: list[dict[str, str]], fieldnames: list[str]) -> list[CsvRow]:
+def _canonicalize_relaxed_configuration_rows(rows: list[CanonicalRow], fieldnames: list[str]) -> list[CanonicalRow]:
     normalized_to_original = {name.strip().lower(): name for name in fieldnames}
     resolved_cols: dict[str, str] = {}
 
@@ -77,9 +77,9 @@ def _canonicalize_relaxed_configuration_rows(rows: list[dict[str, str]], fieldna
         missing_str = ", ".join(missing)
         raise ValueError(f"CSV schema error: missing required columns: {missing_str}")
 
-    canonical_rows: list[CsvRow] = []
+    canonical_rows: list[CanonicalRow] = []
     for i, row in enumerate(rows, start=2):
-        canonical: CsvRow = {}
+        canonical: CanonicalRow = {}
         for key in REQUIRED_RESULTS_COLUMNS:
             raw = row.get(resolved_cols[key], "")
             value = "" if raw is None else str(raw).strip()
@@ -127,11 +127,11 @@ def _extract_energy_from_comment(comment: str) -> float | None:
     return None
 
 
-def extxyz_to_results_rows(extxyz_path: Path) -> list[CsvRow]:
+def extxyz_to_results_rows(extxyz_path: Path) -> list[CanonicalRow]:
     lines = extxyz_path.read_text(encoding="utf-8").splitlines()
     idx = 0
     frame = 0
-    rows: list[CsvRow] = []
+    rows: list[CanonicalRow] = []
 
     while idx < len(lines):
         natoms_line = lines[idx].strip()
