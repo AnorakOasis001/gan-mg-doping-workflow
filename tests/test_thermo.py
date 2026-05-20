@@ -4,6 +4,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.smoke
+
 from gan_mg.analysis.thermo import (
     K_B_EV_PER_K,
     LogSumExpAccumulator,

@@ -303,5 +303,45 @@ def test_build_per_structure_rows_has_clear_composition_error(tmp_path: Path) ->
 
     import pytest
 
-    with pytest.raises(ValueError, match="provide either x_mg_cation OR explicit atom counts OR structure artifact path"):
+    with pytest.raises(ValueError, match="provide mg_count/ga_count/n_count or a structure artifact path"):
         build_per_structure_rows(run_dir)
+
+
+def test_build_per_structure_rows_uses_manifest_relaxed_structure_ref(tmp_path: Path) -> None:
+    run_dir = tmp_path / "runs" / "manifest-relaxed-structure-ref"
+    (run_dir / "inputs").mkdir(parents=True)
+    (run_dir / "structures").mkdir(parents=True)
+    _write_extxyz(run_dir / "structures" / "mgi_x017_cfg0001.extxyz", ["Mg", "Ga", "Ga", "N", "N", "N"])
+
+    with (run_dir / "inputs" / "results.csv").open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["structure_id", "mechanism_code", "relaxed_energy_eV"])
+        writer.writeheader()
+        writer.writerow({"structure_id": "mgi_x017_cfg0001", "mechanism_code": "mgi", "relaxed_energy_eV": -100.0})
+
+    with (run_dir / "inputs" / "structures.csv").open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["structure_id", "relaxed_structure_ref"])
+        writer.writeheader()
+        writer.writerow({"structure_id": "mgi_x017_cfg0001", "relaxed_structure_ref": "structures/mgi_x017_cfg0001.extxyz"})
+
+    rows = build_per_structure_rows(run_dir)
+    assert rows[0]["mg_count"] == 1
+    assert rows[0]["ga_count"] == 2
+    assert rows[0]["n_count"] == 3
+
+
+def test_build_per_structure_rows_finds_nested_structure_artifact_by_prefix(tmp_path: Path) -> None:
+    run_dir = tmp_path / "runs" / "nested-structures"
+    (run_dir / "inputs").mkdir(parents=True)
+    nested = run_dir / "structures" / "relaxed" / "mgi"
+    nested.mkdir(parents=True)
+    _write_extxyz(nested / "mgi_x017_cfg0001_relaxed.extxyz", ["Mg", "Ga", "N", "N"])
+
+    with (run_dir / "inputs" / "results.csv").open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["structure_id", "mechanism", "energy_eV"])
+        writer.writeheader()
+        writer.writerow({"structure_id": "mgi_x017_cfg0001", "mechanism": "mgi", "energy_eV": -5.0})
+
+    rows = build_per_structure_rows(run_dir)
+    assert rows[0]["mg_count"] == 1
+    assert rows[0]["ga_count"] == 1
+    assert rows[0]["n_count"] == 2
