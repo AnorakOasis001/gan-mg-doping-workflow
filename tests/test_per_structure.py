@@ -263,6 +263,35 @@ def test_build_per_structure_rows_prefers_direct_x_mg_cation_in_mixed_schema(tmp
     assert by_id["s002"]["mg_count"] == 2
 
 
+def test_build_per_structure_rows_ignores_invalid_counts_when_x_mg_present(tmp_path: Path) -> None:
+    run_dir = tmp_path / "runs" / "real-schema"
+    (run_dir / "inputs").mkdir(parents=True)
+
+    with (run_dir / "inputs" / "results.csv").open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["structure_id", "mechanism_code", "relaxed_energy_eV", "x_mg_cation", "mg_count", "n_atoms"],
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "structure_id": "mgi_x017_cfg0001",
+                "mechanism_code": "mgi",
+                "relaxed_energy_eV": -100.0,
+                "x_mg_cation": 0.17,
+                "mg_count": "not_an_int",
+                "n_atoms": 64,
+            }
+        )
+
+    rows = build_per_structure_rows(run_dir)
+    assert len(rows) == 1
+    assert rows[0]["x_mg_cation"] == 0.17
+    assert rows[0]["mg_count"] == 0
+    assert rows[0]["ga_count"] == 0
+    assert rows[0]["n_count"] == 0
+
+
 def test_build_per_structure_rows_has_clear_composition_error(tmp_path: Path) -> None:
     run_dir = tmp_path / "runs" / "missing-composition"
     (run_dir / "inputs").mkdir(parents=True)
