@@ -20,7 +20,15 @@ _RELAXED_CONFIG_ALIASES: dict[str, tuple[str, ...]] = {
     "mechanism": ("mechanism", "mechanism_label", "defect_mechanism", "channel"),
     "energy_eV": ("energy_eV", "total_energy_eV", "relaxed_energy_eV", "energy"),
 }
-_OPTIONAL_RAW_COLUMNS = ("mg_count", "ga_count", "n_count", "relaxed_structure_ref")
+_OPTIONAL_RAW_COLUMNS = (
+    "mg_count",
+    "ga_count",
+    "n_count",
+    "relaxed_structure_ref",
+    "input_structure_name",
+    "relaxed_structure_name",
+    "n_atoms",
+)
 
 
 def _timestamp_utc_iso() -> str:

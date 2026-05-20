@@ -303,5 +303,59 @@ def test_build_per_structure_rows_has_clear_composition_error(tmp_path: Path) ->
 
     import pytest
 
-    with pytest.raises(ValueError, match="provide either x_mg_cation OR explicit atom counts OR structure artifact path"):
+    with pytest.raises(ValueError, match="Unable to determine composition"):
+        build_per_structure_rows(run_dir)
+
+
+def test_build_per_structure_rows_infers_from_filename_tokens(tmp_path: Path) -> None:
+    run_dir = tmp_path / "runs" / "filename-infer"
+    (run_dir / "inputs").mkdir(parents=True)
+    with (run_dir / "inputs" / "results.csv").open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "structure_id",
+                "mechanism_code",
+                "relaxed_energy_eV",
+                "input_structure_name",
+                "n_atoms",
+            ],
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "structure_id": "mgi_x017_cfg0001",
+                "mechanism_code": "mgi",
+                "relaxed_energy_eV": -100.0,
+                "input_structure_name": "GaN_MgSub2_MgInt1_Sample1_20250718_170425.cif",
+                "n_atoms": 361,
+            }
+        )
+    rows = build_per_structure_rows(run_dir)
+    assert rows[0]["mg_count"] == 3
+    assert rows[0]["ga_count"] == 178
+    assert rows[0]["n_count"] == 180
+
+
+def test_build_per_structure_rows_filename_parse_error_is_deterministic(tmp_path: Path) -> None:
+    run_dir = tmp_path / "runs" / "filename-bad"
+    (run_dir / "inputs").mkdir(parents=True)
+    with (run_dir / "inputs" / "results.csv").open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["structure_id", "mechanism_code", "relaxed_energy_eV", "input_structure_name", "n_atoms"],
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "structure_id": "mgi_x017_cfg0001",
+                "mechanism_code": "mgi",
+                "relaxed_energy_eV": -100.0,
+                "input_structure_name": "GaN_NoTokens_Sample1.cif",
+                "n_atoms": 361,
+            }
+        )
+    import pytest
+
+    with pytest.raises(ValueError, match="Unable to determine composition for structure_id='mgi_x017_cfg0001'"):
         build_per_structure_rows(run_dir)
