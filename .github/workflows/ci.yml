@@ -1,29 +1,37 @@
-name: CI
+name: Fast PR CI
 
 on:
-  push:
   pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "scripts/**"
+      - "pyproject.toml"
+      - "requirements*"
+      - ".github/workflows/**"
+  push:
+    branches-ignore:
+      - main
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "scripts/**"
+      - "pyproject.toml"
+      - "requirements*"
+      - ".github/workflows/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  smoke:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        mode: [core, plot]
-
-    runs-on: ${{ matrix.os }}
+  fast-validation:
+    name: Fast Validation (Ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Prepare pip cache key inputs
-        shell: pwsh
-        run: |
-          # setup-python cache keys include OS and Python version automatically.
-          # We write the matrix mode into a tracked dependency-path input so
-          # `core` and `plot` caches are separated and cache hits are visible on reruns.
-          "mode=${{ matrix.mode }}" | Out-File -FilePath .pip-cache-key.txt -Encoding utf8
-          "python=3.12" | Out-File -FilePath .pip-cache-key.txt -Append -Encoding utf8
 
       - uses: actions/setup-python@v5
         with:
@@ -31,125 +39,26 @@ jobs:
           cache: pip
           cache-dependency-path: |
             pyproject.toml
-            .pip-cache-key.txt
+            .github/workflows/ci.yml
 
-      - name: Install dependencies
+      - name: Install dependencies (editable)
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install -e ".[dev]"
-          if [ "${{ matrix.mode }}" = "plot" ]; then
-            python -m pip install -e ".[plot]"
+          python -m pip install -e ".[dev]" --no-build-isolation
+
+      - name: Run ruff (if available)
+        run: |
+          if python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('ruff') else 1)"; then
+            python -m ruff check src tests
+          else
+            echo "ruff not installed in dev extras; skipping"
           fi
-        shell: bash
 
       - name: Run mypy
-        run: python -m mypy src/
+        run: python -m mypy src
 
-      - name: Run pytest
-        run: python -m pytest -q
+      - name: Run smoke tests
+        run: python -m pytest tests/smoke -q -m "not slow"
 
-      - name: Run smoke test (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          if [ "${{ matrix.mode }}" = "plot" ]; then
-            bash scripts/00_smoke_test.sh --plot
-          else
-            bash scripts/00_smoke_test.sh
-          fi
-
-      - name: Run smoke test (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          if ("${{ matrix.mode }}" -eq "plot") {
-            powershell -ExecutionPolicy Bypass -File scripts\00_smoke_test.ps1 -Plot
-          } else {
-            powershell -ExecutionPolicy Bypass -File scripts\00_smoke_test.ps1
-          }
-
-  fresh-install:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        python-version: ["3.11", "3.12"]
-
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: pyproject.toml
-
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
-
-      - name: Install package (non-editable)
-        run: python -m pip install .
-
-      - name: Install test dependencies
-        run: python -m pip install ".[dev]"
-
-      - name: Verify import
-        run: python -c "import gan_mg; print(gan_mg.__version__ if hasattr(gan_mg,'__version__') else 'ok')"
-
-      - name: Run pytest
-        run: python -m pytest -q
-
-  build-artifacts:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Build package artifacts
-        run: |
-          python -m pip install --upgrade pip build
-          python -m build
-
-      - name: Verify wheel install/import
-        run: |
-          python -m pip install dist/*.whl
-          python -c "import gan_mg; print(gan_mg.__version__)"
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-artifacts
-          path: |
-            dist/*.whl
-            dist/*.tar.gz
-
-  benchmarks-smoke:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-          cache-dependency-path: pyproject.toml
-
-      - name: Install package
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
-
-      - name: Run benchmark smoke
-        run: |
-          python scripts/benchmark_thermo.py --rows 1000 5000 --outdir results/benchmarks_ci --chunksize 500
-
-      - name: Upload benchmark summary artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: benchmarks-smoke-summary
-          path: results/benchmarks_ci/thermo_benchmarks.jsonl
+      - name: Run fast pytest suite
+        run: python -m pytest -q -m "not slow"

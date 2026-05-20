@@ -1,0 +1,34 @@
+{
+  "effective_sample_size": 7.1685101925794195,
+  "energy_std_eV": 0.015029573327627834,
+  "energy_variance_eV2": 0.000225888074410542,
+  "expected_energy_eV": -0.16535966027032403,
+  "logZ_absolute": 8.510991637726152,
+  "logZ_shifted": 1.4709173105338307,
+  "notes": [],
+  "num_configurations": 10,
+  "p_min": 0.2297146688239838,
+  "provenance": {
+    "cli_args": {
+      "T": 300.0,
+      "chunksize": null,
+      "command": "analyze",
+      "config": null,
+      "csv": "/workspace/gan-mg-doping-workflow/data/golden/v1/inputs/realistic_small.csv",
+      "diagnostics": true,
+      "energy_col": "energy_eV",
+      "profile": false,
+      "quiet": false,
+      "run_dir": "runs",
+      "run_id": null,
+      "validate_output": false,
+      "verbose": false
+    },
+    "git_commit": "004fef8cf3fd9dec3cc809134ef70f7b57caacd8",
+    "input_hash": "e3a5464b54b432defc612cdd92a2ef5d1ad77c085aba5c49274a1255e631b9e2",
+    "platform": "Linux-6.12.47-x86_64-with-glibc2.39",
+    "python_version": "3.14.4",
+    "schema_version": "1.1"
+  },
+  "temperature_K": 300.0
+}
