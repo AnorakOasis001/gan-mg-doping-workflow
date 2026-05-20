@@ -22,6 +22,11 @@ PER_STRUCTURE_COLUMNS = (
     "relaxed_structure_ref",
 )
 
+RAW_MECHANISM_FIELD_ALIASES: tuple[str, ...] = ("mechanism_code", "mechanism")
+RAW_ENERGY_FIELD_ALIASES: tuple[str, ...] = ("relaxed_energy_eV", "energy_eV")
+RAW_MECHANISM_ALIAS_LABEL = "mechanism/mechanism_code"
+RAW_ENERGY_ALIAS_LABEL = "relaxed_energy_eV/energy_eV"
+
 _PROHIBITED_RAW_THERMO_FIELDS = {
     "mixing_energy",
     "mixing_energy_ev",
@@ -76,6 +81,34 @@ def _require_nonempty(value: str | None, *, field: str, row_index: int) -> str:
     if value is None or value.strip() == "":
         raise ValueError(f"row {row_index} has empty '{field}'.")
     return value.strip()
+
+
+def _require_nonempty_alias(
+    row: dict[str, str],
+    aliases: tuple[str, ...],
+    *,
+    accepted: str,
+    row_index: int,
+) -> str:
+    for field in aliases:
+        value = row.get(field)
+        if value is not None and value.strip() != "":
+            return value.strip()
+    raise ValueError(f"row {row_index} missing {accepted}.")
+
+
+def _require_float_alias(
+    row: dict[str, str],
+    aliases: tuple[str, ...],
+    *,
+    accepted: str,
+    row_index: int,
+) -> float:
+    raw_value = _require_nonempty_alias(row, aliases, accepted=accepted, row_index=row_index)
+    try:
+        return float(raw_value)
+    except ValueError as e:
+        raise ValueError(f"row {row_index} has invalid {accepted}: {raw_value!r}.") from e
 
 
 def _parse_int(value: str | None) -> int | None:
@@ -238,10 +271,18 @@ def build_per_structure_rows(run_dir: Path) -> list[dict[str, Any]]:
     out_rows: list[dict[str, Any]] = []
     for idx, row in enumerate(results_rows, start=2):
         structure_id = _require_nonempty(row.get("structure_id"), field="structure_id", row_index=idx)
-        mechanism_label = _require_nonempty(row.get("mechanism"), field="mechanism", row_index=idx)
-        energy_total_eV = _parse_float(row.get("energy_eV"))
-        if energy_total_eV is None:
-            raise ValueError(f"row {idx} has empty 'energy_eV'.")
+        mechanism_label = _require_nonempty_alias(
+            row,
+            RAW_MECHANISM_FIELD_ALIASES,
+            accepted=RAW_MECHANISM_ALIAS_LABEL,
+            row_index=idx,
+        )
+        energy_total_eV = _require_float_alias(
+            row,
+            RAW_ENERGY_FIELD_ALIASES,
+            accepted=RAW_ENERGY_ALIAS_LABEL,
+            row_index=idx,
+        )
 
         manifest_row = manifest_by_id.get(structure_id)
 
