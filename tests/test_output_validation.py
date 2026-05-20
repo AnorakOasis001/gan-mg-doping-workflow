@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 from gan_mg.validation import ValidationError, validate_output, validate_output_file
 
 

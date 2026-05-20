@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 from gan_mg.analysis.crossover import CROSSOVER_COLUMNS, build_mechanism_crossover_rows
 from gan_mg.science.gibbs import GIBBS_SUMMARY_COLUMNS, build_gibbs_summary_rows
 from gan_mg.science.reference import load_reference_config

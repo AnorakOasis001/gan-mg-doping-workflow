@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 MODULE_PATH = Path("scripts/generate_golden.py")
 SPEC = importlib.util.spec_from_file_location("generate_golden", MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None

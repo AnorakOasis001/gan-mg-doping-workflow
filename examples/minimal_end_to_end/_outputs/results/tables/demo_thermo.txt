@@ -1,0 +1,6 @@
+temperature_K = 300.0
+num_configurations = 10
+mixing_energy_min_eV = -0.182000
+partition_function = 4.353227e+00
+mixing_energy_avg_eV = -0.155300
+free_energy_mix_eV = -0.220026
