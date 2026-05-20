@@ -58,7 +58,7 @@ jobs:
         run: python -m mypy src
 
       - name: Run smoke tests
-        run: python -m pytest tests/smoke -q -m "not slow"
+        run: python -m pytest -q -m "smoke and not slow"
 
       - name: Run fast pytest suite
         run: python -m pytest -q -m "not slow"

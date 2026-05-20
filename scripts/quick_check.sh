@@ -12,8 +12,4 @@ echo "[quick-check] mypy"
 python -m mypy src
 
 echo "[quick-check] smoke tests"
-if [ -d tests/smoke ]; then
-  python -m pytest tests/smoke -q -m "not slow"
-else
-  bash scripts/00_smoke_test.sh
-fi
+python -m pytest -q -m "smoke and not slow"

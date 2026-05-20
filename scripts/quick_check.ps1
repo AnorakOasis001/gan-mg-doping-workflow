@@ -12,8 +12,4 @@ Write-Host "[quick-check] mypy"
 python -m mypy src
 
 Write-Host "[quick-check] smoke tests"
-if (Test-Path "tests/smoke") {
-  python -m pytest tests/smoke -q -m "not slow"
-} else {
-  powershell -ExecutionPolicy Bypass -File scripts\00_smoke_test.ps1
-}
+python -m pytest -q -m "smoke and not slow"

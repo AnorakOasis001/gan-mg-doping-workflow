@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.smoke
+
 from gan_mg import ThermoResult
 from gan_mg.api import analyze_from_csv, analyze_run, sweep_from_csv, sweep_run
 from gan_mg.run import init_run, write_run_meta

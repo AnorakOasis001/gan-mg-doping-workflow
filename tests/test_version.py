@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
+pytestmark = pytest.mark.smoke
+
 from pathlib import Path
 
 import gan_mg
