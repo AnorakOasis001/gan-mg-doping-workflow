@@ -354,6 +354,17 @@ def build_import_parser(subparsers: argparse._SubParsersAction[argparse.Argument
         required=True,
         help="Path to external results input (.csv or .extxyz/.xyz).",
     )
+    parser.add_argument(
+        "--artifact-root",
+        action="append",
+        default=[],
+        help="Optional root directory to resolve structure filenames and register artifacts.",
+    )
+    parser.add_argument(
+        "--copy-artifacts",
+        action="store_true",
+        help="Copy resolved structure artifacts into runs/<id>/artifacts and write inputs/structures.csv.",
+    )
     return parser
 
 
@@ -949,14 +960,19 @@ def handle_import(args: argparse.Namespace) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        metadata = import_results_to_run(run_dir=run_dir, source_path=Path(args.results))
+        metadata = import_results_to_run(
+            run_dir=run_dir,
+            source_path=Path(args.results),
+            artifact_roots=[Path(p) for p in args.artifact_root],
+            copy_artifacts=bool(args.copy_artifacts),
+        )
     except (ValueError, FileNotFoundError) as e:
         raise SystemExit(f"Input validation error: {e}") from e
 
     meta = load_run_meta(run_dir)
     meta["command"] = "import"
     meta["run_id"] = args.run_id
-    meta["inputs_csv"] = metadata["results_csv"]
+    meta["inputs_csv"] = str(metadata["results_csv"])
     write_run_meta(run_dir / "run.json", meta)
 
     logger.info("Run import complete: %s", run_dir)

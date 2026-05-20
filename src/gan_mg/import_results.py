@@ -20,7 +20,15 @@ _RELAXED_CONFIG_ALIASES: dict[str, tuple[str, ...]] = {
     "mechanism": ("mechanism", "mechanism_label", "defect_mechanism", "channel"),
     "energy_eV": ("energy_eV", "total_energy_eV", "relaxed_energy_eV", "energy"),
 }
-_OPTIONAL_RAW_COLUMNS = ("mg_count", "ga_count", "n_count", "relaxed_structure_ref")
+_OPTIONAL_RAW_COLUMNS = (
+    "mg_count",
+    "ga_count",
+    "n_count",
+    "relaxed_structure_ref",
+    "input_structure_name",
+    "relaxed_structure_name",
+    "n_atoms",
+)
 
 
 def _timestamp_utc_iso() -> str:
@@ -191,7 +199,57 @@ def write_results_csv(
             writer.writerow({k: row.get(k, "") for k in fieldnames})
 
 
-def import_results_to_run(run_dir: Path, source_path: Path) -> dict[str, str]:
+def _register_structure_artifacts(
+    run_dir: Path,
+    rows: Sequence[Mapping[str, RowValue]],
+    *,
+    artifact_roots: Sequence[Path],
+    copy_artifacts: bool,
+) -> Path | None:
+    by_id: dict[str, str] = {}
+    for row in rows:
+        sid = str(row.get("structure_id", "")).strip()
+        if not sid:
+            continue
+        relaxed_name = str(row.get("relaxed_structure_name", "")).strip()
+        input_name = str(row.get("input_structure_name", "")).strip()
+        if relaxed_name:
+            by_id[sid] = relaxed_name
+        elif input_name:
+            by_id[sid] = input_name
+    if not by_id:
+        return None
+    artifacts_dir = run_dir / "artifacts"
+    if copy_artifacts:
+        artifacts_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = run_dir / "inputs" / "structures.csv"
+    with manifest_path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["structure_id", "path", "source_name"])
+        writer.writeheader()
+        for sid, source_name in sorted(by_id.items()):
+            resolved: Path | None = None
+            for root in artifact_roots:
+                candidate = (root / source_name).resolve()
+                if candidate.exists() and candidate.is_file():
+                    resolved = candidate
+                    break
+            if resolved is None:
+                continue
+            final_path = resolved
+            if copy_artifacts:
+                final_path = artifacts_dir / f"{sid}{resolved.suffix.lower()}"
+                shutil.copy2(resolved, final_path)
+            writer.writerow({"structure_id": sid, "path": str(final_path), "source_name": source_name})
+    return manifest_path
+
+
+def import_results_to_run(
+    run_dir: Path,
+    source_path: Path,
+    *,
+    artifact_roots: Sequence[Path] | None = None,
+    copy_artifacts: bool = False,
+) -> dict[str, object]:
     run_dir = Path(run_dir)
     source_path = Path(source_path).expanduser().resolve()
     if not source_path.exists() or not source_path.is_file():
@@ -203,6 +261,8 @@ def import_results_to_run(run_dir: Path, source_path: Path) -> dict[str, str]:
     outputs_dir.mkdir(parents=True, exist_ok=True)
 
     ext = source_path.suffix.lower()
+    roots = [Path(root).expanduser().resolve() for root in (artifact_roots or ())]
+    structures_manifest: Path | None = None
     if ext == ".csv":
         try:
             rows, fieldnames = _validate_csv_results_schema(source_path)
@@ -226,6 +286,9 @@ def import_results_to_run(run_dir: Path, source_path: Path) -> dict[str, str]:
         write_results_csv(rows, results_csv, columns=tuple(REQUIRED_RESULTS_COLUMNS) + passthrough_columns)
         # Reuse canonical CSV validation logic used by thermo analysis.
         read_energies_csv(results_csv, energy_col="energy_eV")
+        structures_manifest = _register_structure_artifacts(
+            run_dir, rows, artifact_roots=roots, copy_artifacts=copy_artifacts
+        )
     elif ext in {".extxyz", ".xyz"}:
         rows = extxyz_to_results_rows(source_path)
         canonical_csv = inputs_dir / "results.csv"
@@ -245,7 +308,11 @@ def import_results_to_run(run_dir: Path, source_path: Path) -> dict[str, str]:
         "sha256": _sha256_hex(source_path),
         "results_csv": str(results_csv),
         "format": ext,
+        "copy_artifacts": bool(copy_artifacts),
+        "artifact_roots": [str(root) for root in roots],
     }
+    if structures_manifest is not None:
+        metadata["structures_manifest"] = str(structures_manifest)
     metadata_path = inputs_dir / "import.json"
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     return {

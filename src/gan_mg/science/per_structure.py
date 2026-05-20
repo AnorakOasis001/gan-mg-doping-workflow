@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import logging
 import math
+import re
 from pathlib import Path
 from typing import Any
 
@@ -222,6 +223,40 @@ def _resolve_structure_path(
     return None
 
 
+_COUNT_TOKEN_RE = re.compile(r"([A-Za-z]+)(\d+)")
+
+
+def _infer_composition_from_filename(name: str, n_atoms: int | None) -> tuple[int, int, int] | None:
+    """Infer (mg_count, ga_count, n_count) from known workflow filename tokens.
+
+    Supported tokens include MgSubX, MgIntY, VNZ/VNZ-like labels.
+    """
+    stem = Path(name).stem
+    tokens = {k.lower(): int(v) for k, v in _COUNT_TOKEN_RE.findall(stem)}
+    mg_sub = tokens.get("mgsub", 0)
+    mg_int = tokens.get("mgint", 0)
+    vn = tokens.get("vn", 0)
+    mg_count = mg_sub + mg_int
+    if mg_count <= 0:
+        return None
+    if n_atoms is None or n_atoms <= 0:
+        return None
+    host_total = n_atoms - mg_int + vn
+    if host_total % 2 != 0:
+        raise ValueError(
+            f"Filename-derived composition is ambiguous for '{name}': n_atoms={n_atoms}, MgInt={mg_int}, VN={vn}."
+        )
+    ga_pristine = host_total // 2
+    ga_count = ga_pristine - mg_sub
+    n_count = ga_pristine - vn
+    if min(mg_count, ga_count, n_count) < 0:
+        raise ValueError(
+            f"Filename-derived composition is invalid for '{name}': "
+            f"mg_count={mg_count}, ga_count={ga_count}, n_count={n_count}."
+        )
+    return mg_count, ga_count, n_count
+
+
 def build_per_structure_rows(run_dir: Path) -> list[dict[str, Any]]:
     run_dir = Path(run_dir)
     results_path = run_dir / "inputs" / "results.csv"
@@ -297,16 +332,36 @@ def build_per_structure_rows(run_dir: Path) -> list[dict[str, Any]]:
                     ga_count = ga_count if ga_count is not None else _parse_int(manifest_row.get("ga_count"))
                     n_count = n_count if n_count is not None else _parse_int(manifest_row.get("n_count"))
 
-            explicit_ref = row.get("relaxed_structure_ref")
+            explicit_ref = _first_nonempty(row, "relaxed_structure_ref", "relaxed_structure_name", "input_structure_name")
             structure_path = _resolve_structure_path(run_dir, structure_id, explicit_ref, manifest_row)
 
             if mg_count is None or ga_count is None or n_count is None:
-                if structure_path is None:
-                    raise ValueError(
-                        f"Composition unavailable for structure_id='{structure_id}': "
-                        "provide either x_mg_cation OR explicit atom counts OR structure artifact path."
-                    )
-                mg_count, ga_count, n_count, total_atoms = count_composition_from_structure(structure_path)
+                if structure_path is not None:
+                    mg_count, ga_count, n_count, total_atoms = count_composition_from_structure(structure_path)
+                    LOGGER.info("Composition inferred from structure artifact for structure_id='%s': %s", structure_id, structure_path)
+                else:
+                    n_atoms = _parse_int(_first_nonempty(row, "n_atoms", "site_count_total"))
+                    filename_hint = _first_nonempty(row, "relaxed_structure_name", "input_structure_name", "relaxed_structure_ref")
+                    if filename_hint:
+                        inferred = _infer_composition_from_filename(filename_hint, n_atoms)
+                        if inferred is not None:
+                            mg_count, ga_count, n_count = inferred
+                            total_atoms = mg_count + ga_count + n_count
+                            LOGGER.info(
+                                "Composition inferred from filename for structure_id='%s' using '%s'",
+                                structure_id,
+                                filename_hint,
+                            )
+                        else:
+                            raise ValueError(
+                                f"Unable to determine composition for structure_id='{structure_id}' from filename "
+                                f"'{filename_hint}': provide mg_count/ga_count/n_count or a structure artifact path."
+                            )
+                    else:
+                        raise ValueError(
+                            f"Unable to determine composition for structure_id='{structure_id}': "
+                            "provide mg_count/ga_count/n_count or a structure artifact path."
+                        )
                 cation_total = mg_count + ga_count
                 x_mg_cation = (mg_count / cation_total) if cation_total > 0 else 0.0
             else:
