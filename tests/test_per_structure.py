@@ -4,6 +4,7 @@ import csv
 from pathlib import Path
 
 from gan_mg.science.per_structure import (
+    build_per_structure_rows,
     canonicalize_mechanism,
     count_composition_from_structure,
 )
@@ -135,3 +136,54 @@ def test_cli_derive_rejects_raw_dataset_with_derived_thermo_fields(tmp_path: Pat
 
     assert proc.returncode != 0
     assert "boundary violation" in (proc.stderr + proc.stdout)
+
+
+def test_build_per_structure_rows_supports_archer2_alias_columns(tmp_path: Path) -> None:
+    run_dir = tmp_path / "runs" / "real-test"
+    (run_dir / "inputs").mkdir(parents=True)
+    (run_dir / "structures").mkdir(parents=True)
+    _write_extxyz(run_dir / "structures" / "s001.extxyz", ["Mg", "Ga", "N", "N"])
+
+    with (run_dir / "inputs" / "results.csv").open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["structure_id", "mechanism_code", "relaxed_energy_eV"],
+        )
+        writer.writeheader()
+        writer.writerow({"structure_id": "s001", "mechanism_code": "MgGa+VN", "relaxed_energy_eV": -1.23})
+
+    rows = build_per_structure_rows(run_dir)
+    assert len(rows) == 1
+    assert rows[0]["mechanism_label"] == "MgGa+VN"
+    assert rows[0]["mechanism_code"] == "vn"
+    assert rows[0]["energy_total_eV"] == -1.23
+
+
+def test_build_per_structure_rows_supports_mixed_alias_columns(tmp_path: Path) -> None:
+    run_dir = tmp_path / "runs" / "mixed-test"
+    (run_dir / "inputs").mkdir(parents=True)
+    (run_dir / "structures").mkdir(parents=True)
+    _write_extxyz(run_dir / "structures" / "s001.extxyz", ["Mg", "Ga", "N", "N"])
+    _write_extxyz(run_dir / "structures" / "s002.extxyz", ["Mg", "Mg", "Ga", "N", "N", "N"])
+
+    with (run_dir / "inputs" / "results.csv").open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "structure_id",
+                "mechanism",
+                "energy_eV",
+                "mechanism_code",
+                "relaxed_energy_eV",
+            ],
+        )
+        writer.writeheader()
+        writer.writerow({"structure_id": "s001", "mechanism": "Mgi+2MgGa", "energy_eV": -1.1})
+        writer.writerow({"structure_id": "s002", "mechanism_code": "MgGa+VN", "relaxed_energy_eV": -1.2})
+
+    rows = build_per_structure_rows(run_dir)
+    assert [row["structure_id"] for row in rows] == ["s001", "s002"]
+    assert rows[0]["mechanism_code"] == "mgi"
+    assert rows[0]["energy_total_eV"] == -1.1
+    assert rows[1]["mechanism_code"] == "vn"
+    assert rows[1]["energy_total_eV"] == -1.2

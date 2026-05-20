@@ -78,6 +78,14 @@ def _require_nonempty(value: str | None, *, field: str, row_index: int) -> str:
     return value.strip()
 
 
+def _first_nonempty(row: dict[str, str], *columns: str) -> str | None:
+    for column in columns:
+        value = row.get(column)
+        if value is not None and value.strip() != "":
+            return value.strip()
+    return None
+
+
 def _parse_int(value: str | None) -> int | None:
     if value is None or value.strip() == "":
         return None
@@ -238,10 +246,19 @@ def build_per_structure_rows(run_dir: Path) -> list[dict[str, Any]]:
     out_rows: list[dict[str, Any]] = []
     for idx, row in enumerate(results_rows, start=2):
         structure_id = _require_nonempty(row.get("structure_id"), field="structure_id", row_index=idx)
-        mechanism_label = _require_nonempty(row.get("mechanism"), field="mechanism", row_index=idx)
-        energy_total_eV = _parse_float(row.get("energy_eV"))
-        if energy_total_eV is None:
-            raise ValueError(f"row {idx} has empty 'energy_eV'.")
+        mechanism_label = _first_nonempty(row, "mechanism", "mechanism_code")
+        if mechanism_label is None:
+            raise ValueError(f"row {idx} missing mechanism/mechanism_code.")
+
+        energy_raw = _first_nonempty(row, "relaxed_energy_eV", "energy_eV")
+        if energy_raw is None:
+            raise ValueError(f"row {idx} missing relaxed_energy_eV/energy_eV.")
+        try:
+            energy_total_eV = float(energy_raw)
+        except ValueError as exc:
+            raise ValueError(
+                f"row {idx} has non-numeric relaxed_energy_eV/energy_eV='{energy_raw}'."
+            ) from exc
 
         manifest_row = manifest_by_id.get(structure_id)
 
