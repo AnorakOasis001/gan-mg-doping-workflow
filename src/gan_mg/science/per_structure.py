@@ -197,27 +197,52 @@ def _resolve_structure_path(
     explicit_ref: str | None,
     manifest_row: dict[str, str] | None,
 ) -> Path | None:
-    if explicit_ref and explicit_ref.strip():
-        ref_path = Path(explicit_ref)
+    def _resolve_existing(candidate_ref: str) -> Path | None:
+        ref_path = Path(candidate_ref)
+        candidates = [ref_path]
         if not ref_path.is_absolute():
-            ref_path = (run_dir / ref_path).resolve()
-        if ref_path.exists():
-            return ref_path
+            candidates.extend(
+                [
+                    run_dir / ref_path,
+                    run_dir / "inputs" / ref_path,
+                    run_dir / "structures" / ref_path,
+                ]
+            )
+        for candidate in candidates:
+            resolved = candidate.resolve()
+            if resolved.exists() and resolved.is_file():
+                return resolved
+        return None
+
+    if explicit_ref and explicit_ref.strip():
+        resolved = _resolve_existing(explicit_ref.strip())
+        if resolved is not None:
+            return resolved
 
     if manifest_row is not None:
-        manifest_path = manifest_row.get("path", "").strip()
-        if manifest_path:
-            ref_path = Path(manifest_path)
-            if not ref_path.is_absolute():
-                ref_path = (run_dir / manifest_path).resolve()
-            if ref_path.exists():
-                return ref_path
+        for key in ("path", "relaxed_structure_ref", "structure_path", "artifact_path"):
+            manifest_path = manifest_row.get(key, "").strip()
+            if not manifest_path:
+                continue
+            resolved = _resolve_existing(manifest_path)
+            if resolved is not None:
+                return resolved
 
     structures_dir = run_dir / "structures"
     for suffix in (".extxyz", ".cif"):
         candidate = structures_dir / f"{structure_id}{suffix}"
         if candidate.exists():
             return candidate
+
+    for base in (run_dir / "structures", run_dir / "inputs", run_dir / "outputs"):
+        if not base.exists():
+            continue
+        for suffix in (".extxyz", ".cif"):
+            direct = list(base.glob(f"{structure_id}{suffix}"))
+            prefixed = list(base.rglob(f"{structure_id}*{suffix}"))
+            for candidate in direct + prefixed:
+                if candidate.exists() and candidate.is_file():
+                    return candidate.resolve()
 
     return None
 
@@ -303,8 +328,8 @@ def build_per_structure_rows(run_dir: Path) -> list[dict[str, Any]]:
             if mg_count is None or ga_count is None or n_count is None:
                 if structure_path is None:
                     raise ValueError(
-                        f"Composition unavailable for structure_id='{structure_id}': "
-                        "provide either x_mg_cation OR explicit atom counts OR structure artifact path."
+                        f"Unable to determine composition for structure_id='{structure_id}': "
+                        "provide mg_count/ga_count/n_count or a structure artifact path."
                     )
                 mg_count, ga_count, n_count, total_atoms = count_composition_from_structure(structure_path)
                 cation_total = mg_count + ga_count
