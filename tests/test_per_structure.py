@@ -77,7 +77,7 @@ def test_build_per_structure_rows_accepts_legacy_schema(tmp_path: Path) -> None:
 def test_build_per_structure_rows_accepts_archer2_schema(tmp_path: Path) -> None:
     run_path = tmp_path / "archer2-run"
     (run_path / "structures").mkdir(parents=True)
-    _write_extxyz(run_path / "structures" / "archer2_001.extxyz", ["Mg", "Ga", "Ga", "N", "N", "N"])
+    _write_extxyz(run_path / "structures" / "relaxed-archer2-001.extxyz", ["Mg", "Ga", "Ga", "N", "N", "N"])
     _write_results_csv(
         run_path / "inputs" / "results.csv",
         [
@@ -109,7 +109,7 @@ def test_build_per_structure_rows_accepts_archer2_schema(tmp_path: Path) -> None
                 "energy_per_atom_eV": -20.576,
                 "relaxation_time_s": 42.0,
                 "input_structure_name": "input.extxyz",
-                "relaxed_structure_name": "archer2_001.extxyz",
+                "relaxed_structure_name": "relaxed-archer2-001.extxyz",
                 "calculator_name": "mace",
                 "model_name": "research-model",
                 "workflow_stage": "relaxed",
@@ -127,6 +127,7 @@ def test_build_per_structure_rows_accepts_archer2_schema(tmp_path: Path) -> None
     assert rows[0]["mg_count"] == 1
     assert rows[0]["ga_count"] == 2
     assert rows[0]["n_count"] == 3
+    assert rows[0]["relaxed_structure_ref"].endswith("relaxed-archer2-001.extxyz")
 
 
 def test_build_per_structure_rows_prefers_explicit_aliases_and_falls_back_per_row(tmp_path: Path) -> None:
