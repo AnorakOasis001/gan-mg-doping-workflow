@@ -24,6 +24,11 @@ PER_STRUCTURE_COLUMNS = (
 
 RAW_MECHANISM_FIELD_ALIASES: tuple[str, ...] = ("mechanism_code", "mechanism")
 RAW_ENERGY_FIELD_ALIASES: tuple[str, ...] = ("relaxed_energy_eV", "energy_eV")
+RAW_STRUCTURE_REF_FIELD_ALIASES: tuple[str, ...] = (
+    "relaxed_structure_ref",
+    "relaxed_structure_name",
+    "input_structure_name",
+)
 RAW_MECHANISM_ALIAS_LABEL = "mechanism/mechanism_code"
 RAW_ENERGY_ALIAS_LABEL = "relaxed_energy_eV/energy_eV"
 
@@ -83,6 +88,14 @@ def _require_nonempty(value: str | None, *, field: str, row_index: int) -> str:
     return value.strip()
 
 
+def _first_nonempty_alias(row: dict[str, str], aliases: tuple[str, ...]) -> str | None:
+    for field in aliases:
+        value = row.get(field)
+        if value is not None and value.strip() != "":
+            return value.strip()
+    return None
+
+
 def _require_nonempty_alias(
     row: dict[str, str],
     aliases: tuple[str, ...],
@@ -90,11 +103,10 @@ def _require_nonempty_alias(
     accepted: str,
     row_index: int,
 ) -> str:
-    for field in aliases:
-        value = row.get(field)
-        if value is not None and value.strip() != "":
-            return value.strip()
-    raise ValueError(f"row {row_index} missing {accepted}.")
+    value = _first_nonempty_alias(row, aliases)
+    if value is None:
+        raise ValueError(f"row {row_index} missing {accepted}.")
+    return value
 
 
 def _require_float_alias(
@@ -224,10 +236,13 @@ def _resolve_structure_path(
 ) -> Path | None:
     if explicit_ref and explicit_ref.strip():
         ref_path = Path(explicit_ref)
-        if not ref_path.is_absolute():
-            ref_path = (run_dir / ref_path).resolve()
-        if ref_path.exists():
-            return ref_path
+        if ref_path.is_absolute():
+            candidates = [ref_path]
+        else:
+            candidates = [(run_dir / ref_path).resolve(), (run_dir / "structures" / ref_path).resolve()]
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
 
     if manifest_row is not None:
         manifest_path = manifest_row.get("path", "").strip()
@@ -296,7 +311,7 @@ def build_per_structure_rows(run_dir: Path) -> list[dict[str, Any]]:
                 ga_count = ga_count if ga_count is not None else _parse_int(manifest_row.get("ga_count"))
                 n_count = n_count if n_count is not None else _parse_int(manifest_row.get("n_count"))
 
-        explicit_ref = row.get("relaxed_structure_ref")
+        explicit_ref = _first_nonempty_alias(row, RAW_STRUCTURE_REF_FIELD_ALIASES)
         structure_path = _resolve_structure_path(run_dir, structure_id, explicit_ref, manifest_row)
 
         if mg_count is None or ga_count is None or n_count is None:
