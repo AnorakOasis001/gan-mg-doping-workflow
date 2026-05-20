@@ -262,6 +262,9 @@ def build_per_structure_rows(run_dir: Path) -> list[dict[str, Any]]:
 
         manifest_row = manifest_by_id.get(structure_id)
 
+        x_mg_raw = _parse_float(row.get("x_mg_cation"))
+        x_mg_cation = x_mg_raw if x_mg_raw is not None and math.isfinite(x_mg_raw) else None
+
         mg_count = _parse_int(row.get("mg_count"))
         ga_count = _parse_int(row.get("ga_count"))
         n_count = _parse_int(row.get("n_count"))
@@ -275,18 +278,28 @@ def build_per_structure_rows(run_dir: Path) -> list[dict[str, Any]]:
         explicit_ref = row.get("relaxed_structure_ref")
         structure_path = _resolve_structure_path(run_dir, structure_id, explicit_ref, manifest_row)
 
-        if mg_count is None or ga_count is None or n_count is None:
+        if x_mg_cation is not None:
+            if mg_count is None:
+                mg_count = 0
+            if ga_count is None:
+                ga_count = 0
+            if n_count is None:
+                n_count = 0
+            total_atoms = mg_count + ga_count + n_count
+        elif mg_count is None or ga_count is None or n_count is None:
             if structure_path is None:
                 raise ValueError(
-                    f"Unable to determine composition for structure_id='{structure_id}': "
-                    "provide mg_count/ga_count/n_count or a structure artifact path."
+                    f"Composition unavailable for structure_id='{structure_id}': "
+                    "provide either x_mg_cation OR explicit atom counts OR structure artifact path."
                 )
             mg_count, ga_count, n_count, total_atoms = count_composition_from_structure(structure_path)
+            cation_total = mg_count + ga_count
+            x_mg_cation = (mg_count / cation_total) if cation_total > 0 else 0.0
         else:
             total_atoms = mg_count + ga_count + n_count
+            cation_total = mg_count + ga_count
+            x_mg_cation = (mg_count / cation_total) if cation_total > 0 else 0.0
 
-        cation_total = mg_count + ga_count
-        x_mg_cation = (mg_count / cation_total) if cation_total > 0 else 0.0
         doping_level_percent = 100.0 * x_mg_cation
 
         out_rows.append(

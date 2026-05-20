@@ -187,3 +187,92 @@ def test_build_per_structure_rows_supports_mixed_alias_columns(tmp_path: Path) -
     assert rows[0]["energy_total_eV"] == -1.1
     assert rows[1]["mechanism_code"] == "vn"
     assert rows[1]["energy_total_eV"] == -1.2
+
+
+def test_build_per_structure_rows_accepts_direct_x_mg_cation(tmp_path: Path) -> None:
+    run_dir = tmp_path / "runs" / "real-thermo"
+    (run_dir / "inputs").mkdir(parents=True)
+
+    with (run_dir / "inputs" / "results.csv").open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["structure_id", "mechanism_code", "relaxed_energy_eV", "x_mg_cation", "n_atoms"],
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "structure_id": "mgi_x017_cfg0001",
+                "mechanism_code": "mgi",
+                "relaxed_energy_eV": -100.0,
+                "x_mg_cation": 0.17,
+                "n_atoms": 64,
+            }
+        )
+
+    rows = build_per_structure_rows(run_dir)
+    assert len(rows) == 1
+    assert rows[0]["x_mg_cation"] == 0.17
+    assert rows[0]["doping_level_percent"] == 17.0
+    assert rows[0]["mg_count"] == 0
+    assert rows[0]["ga_count"] == 0
+    assert rows[0]["n_count"] == 0
+
+
+def test_build_per_structure_rows_prefers_direct_x_mg_cation_in_mixed_schema(tmp_path: Path) -> None:
+    run_dir = tmp_path / "runs" / "mixed-schema"
+    (run_dir / "inputs").mkdir(parents=True)
+
+    with (run_dir / "inputs" / "results.csv").open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "structure_id",
+                "mechanism",
+                "energy_eV",
+                "x_mg_cation",
+                "mg_count",
+                "ga_count",
+                "n_count",
+            ],
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "structure_id": "s001",
+                "mechanism": "MgGa+VN",
+                "energy_eV": -1.0,
+                "x_mg_cation": 0.2,
+            }
+        )
+        writer.writerow(
+            {
+                "structure_id": "s002",
+                "mechanism": "Mgi+2MgGa",
+                "energy_eV": -1.2,
+                "mg_count": 2,
+                "ga_count": 4,
+                "n_count": 6,
+            }
+        )
+
+    rows = build_per_structure_rows(run_dir)
+    by_id = {row["structure_id"]: row for row in rows}
+    assert by_id["s001"]["x_mg_cation"] == 0.2
+    assert by_id["s001"]["mg_count"] == 0
+    assert by_id["s002"]["x_mg_cation"] == 2 / 6
+    assert by_id["s002"]["mg_count"] == 2
+
+
+def test_build_per_structure_rows_has_clear_composition_error(tmp_path: Path) -> None:
+    run_dir = tmp_path / "runs" / "missing-composition"
+    (run_dir / "inputs").mkdir(parents=True)
+
+    with (run_dir / "inputs" / "results.csv").open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["structure_id", "mechanism", "energy_eV"])
+        writer.writeheader()
+        writer.writerow({"structure_id": "s001", "mechanism": "MgGa+VN", "energy_eV": -1.0})
+
+    import pytest
+
+    with pytest.raises(ValueError, match="provide either x_mg_cation OR explicit atom counts OR structure artifact path"):
+        build_per_structure_rows(run_dir)
