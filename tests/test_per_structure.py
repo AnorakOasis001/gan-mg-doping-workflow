@@ -359,3 +359,27 @@ def test_build_per_structure_rows_filename_parse_error_is_deterministic(tmp_path
 
     with pytest.raises(ValueError, match="Unable to determine composition for structure_id='mgi_x017_cfg0001'"):
         build_per_structure_rows(run_dir)
+
+
+def test_build_per_structure_rows_filename_inference_detects_atom_count_ambiguity(tmp_path: Path) -> None:
+    run_dir = tmp_path / "runs" / "filename-ambiguous"
+    (run_dir / "inputs").mkdir(parents=True)
+    with (run_dir / "inputs" / "results.csv").open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["structure_id", "mechanism_code", "relaxed_energy_eV", "input_structure_name", "n_atoms"],
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "structure_id": "mgi_x017_cfg0002",
+                "mechanism_code": "mgi",
+                "relaxed_energy_eV": -100.0,
+                "input_structure_name": "GaN_MgSub2_MgInt1_Sample2.cif",
+                "n_atoms": 360,
+            }
+        )
+    import pytest
+
+    with pytest.raises(ValueError, match="Filename-derived composition is ambiguous"):
+        build_per_structure_rows(run_dir)
